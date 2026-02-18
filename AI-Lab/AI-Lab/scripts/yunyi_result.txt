@@ -1,0 +1,24 @@
+﻿Coder config: {'provider': 'claude_custom', 'model': 'claude-opus-4-6-20260205', 'base_url': 'https://yunyi.rdzhvip.com/claude', 'api_type': 'anthropic'}
+API key: TKYWXZAS...FSJQ
+Base URL: https://yunyi.rdzhvip.com/claude
+
+==================================================
+Test 1: Anthropic /v1/messages 鏍煎紡
+==================================================
+  POST https://yunyi.rdzhvip.com/claude/v1/messages
+  Status: 200
+  Response: {"stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":2590,"output_tokens":1},"content":[{"text":"OK","type":"text"}],"id":"msg_20260216145815","model":"claude-opus-4-6-20260205","role":"assistant"}
+
+==================================================
+Test 2: OpenAI /v1/chat/completions 鏍煎紡
+==================================================
+  POST https://yunyi.rdzhvip.com/claude/v1/chat/completions
+  Status: 404
+  Response: Cannot POST /claude/v1/chat/completions
+
+==================================================
+Test 3: Anthropic /v1/messages + system (CrewAI 鏍煎紡)
+==================================================
+  POST https://yunyi.rdzhvip.com/claude/v1/messages
+  Status: 500
+  Response: {"type":"upstream_error","message":"{\"error\":{\"message\":\"瑙ｆ瀽璇锋眰浣撳け璐? Mismatch type []types.AnthropicSystemMessage with value string \\\"at index 62: mismatched type with value\\\\n\\\\n\\\\ts\\\\\\\":100,\\\\\\\"system\\\\\\\":\\\\\\\"You are a helpf\\\\n\\\\t................^...............\\\\n\

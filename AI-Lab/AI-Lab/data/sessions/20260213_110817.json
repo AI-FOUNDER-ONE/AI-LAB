@@ -1,0 +1,30 @@
+{
+  "session_id": "20260213_110817",
+  "created_at": "2026-02-13T11:08:17.207118",
+  "updated_at": "2026-02-13T11:08:17.207118",
+  "user_intent": "帮我编一个西双版纳购房攻略",
+  "state": "IDLE",
+  "mission_protocol": null,
+  "cko_logs": [
+    {
+      "timestamp": "2026-02-13T11:08:17.211267",
+      "role": "user",
+      "content": "帮我编一个西双版纳购房攻略"
+    },
+    {
+      "timestamp": "2026-02-13T11:08:17.912130",
+      "role": "CKO",
+      "content": "⚠️ 错误: 请安装 zhipuai: pip install zhipuai"
+    }
+  ],
+  "meeting_logs": [],
+  "final_code": "",
+  "test_reports": [],
+  "timeline_events": [
+    {
+      "timestamp": "2026-02-13T11:08:17.210290",
+      "state": "GROUNDING",
+      "description": "开始需求打磨"
+    }
+  ]
+}

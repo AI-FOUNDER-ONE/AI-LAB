@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Emerald Snake - 现代网页版贪吃蛇</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 游戏主容器 -->
+  <div id="game-container">
+    <!-- 顶部信息栏 -->
+    <div id="hud">
+      <div class="hud-item">
+        <span class="hud-label">分数</span>
+        <span id="score-display" class="hud-value">0</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">最高分</span>
+        <span id="highscore-display" class="hud-value">0</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">模式</span>
+        <span id="mode-display" class="hud-value">手动</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">关卡</span>
+        <span id="level-display" class="hud-value">1</span>
+      </div>
+    </div>
+
+    <!-- Canvas 游戏画布 -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- 道具状态指示器 -->
+    <div id="powerup-indicator" class="hidden">
+      <span id="powerup-name"></span>
+      <div id="powerup-timer-bar"><div id="powerup-timer-fill"></div></div>
+    </div>
+
+    <!-- 控制按钮栏 -->
+    <div id="controls">
+      <button id="btn-pause" class="ctrl-btn" aria-label="暂停游戏">⏸ 暂停</button>
+      <button id="btn-restart" class="ctrl-btn" aria-label="重新开始">🔄 重启</button>
+      <button id="btn-mode" class="ctrl-btn" aria-label="切换AI模式">🤖 AI模式</button>
+      <button id="btn-level" class="ctrl-btn" aria-label="切换关卡">🗺 关卡</button>
+      <button id="btn-sound" class="ctrl-btn" aria-label="切换音效">🔊 音效</button>
+    </div>
+
+    <!-- 遮罩层：开始/暂停/结束 -->
+    <div id="overlay">
+      <div id="overlay-content">
+        <h1 id="overlay-title">🐍 Emerald Snake</h1>
+        <p id="overlay-message">按 Space 或点击开始游戏</p>
+        <p id="overlay-sub" class="sub-text">WASD/方向键控制 | 滑动触屏 | AI自动寻路</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模块化脚本加载 -->
+  <script src="game.js"></script>
+  <script src="ai.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

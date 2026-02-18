@@ -1,0 +1,296 @@
+﻿[PATCH] Anthropic Messages.create 宸?patch (system string 鈫?array)
+==================================================
+Testing CKO Agent (Kimi + Web Search)
+==================================================
+LLM Configured: Model=openai/kimi-k2-thinking-251104, BaseURL=https://ark.cn-beijing.volces.com/api/v3
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃殌 Crew Execution Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Crew Execution Started                                                     鈹?
+鈹? Name:                                                                      鈹?
+鈹? crew                                                                       鈹?
+鈹? ID:                                                                        鈹?
+鈹? 53a89b09-7892-4cf0-a12d-c5e728888423                                       鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃搵 Task Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Task Started                                                               鈹?
+鈹? Name: 浠婂ぉ鏈変粈涔堢儹鐐规柊闂?(What are the hot news today?)                    鈹?
+鈹? ID: a197d4aa-9f8d-4715-9288-2997a354281e                                   鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃 Agent Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Agent: CKO                                                                 鈹?
+鈹?                                                                            鈹?
+鈹? Task: 浠婂ぉ鏈変粈涔堢儹鐐规柊闂?(What are the hot news today?)                    鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鉂?LLM Error 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? LLM Call Failed                                                            鈹?
+鈹? Error: litellm.BadRequestError: OpenAIException - The request failed       鈹?
+鈹? because it is missing `tools.function` parameter. Request id:              鈹?
+鈹? 02177122740238666d4fff57f472cc97f9dc7178d7aa5263f217a                      鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃搵 Task Failure 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Task Failed                                                                鈹?
+鈹? Name:                                                                      鈹?
+鈹? 浠婂ぉ鏈変粈涔堢儹鐐规柊闂?(What are the hot news today?)                          鈹?
+
+==================================================
+RESULT FAILED:
+litellm.BadRequestError: OpenAIException - The request failed because it is missing `tools.function` parameter. Request id: 02177122740238666d4fff57f472cc97f9dc7178d7aa5263f217a
+鈹? Agent:                                                                     鈹?
+鈹? CKO                                                                        鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Crew Failure 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Crew Execution Failed                                                      鈹?
+鈹? Name:                                                                      鈹?
+鈹? crew                                                                       鈹?
+鈹? ID:                                                                        鈹?
+鈹? 53a89b09-7892-4cf0-a12d-c5e728888423                                       鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Tracing Status 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Info: Tracing is disabled.                                                 鈹?
+鈹?                                                                            鈹?
+鈹? To enable tracing, do any one of these:                                    鈹?
+鈹? 鈥?Set tracing=True in your Crew/Flow code                                  鈹?
+鈹? 鈥?Set CREWAI_TRACING_ENABLED=true in your project's .env file              鈹?
+鈹? 鈥?Run: crewai traces enable                                                鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+python : Traceback (most recent call last):
+所在位置 行:1 字符: 32
++ ... YTHONIOENCODING="utf-8"; python scripts/test_cko_kimi.py 2>&
+1 | Out-F ...
++                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~
+    + CategoryInfo          : NotSpecified: (Traceback (most rece 
+   nt call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\llms\open
+ai\openai.py", line 844, in completion
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\llms\open
+ai\openai.py", line 772, in completion
+    ) = self.make_sync_openai_chat_completion_request(
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        openai_client=openai_client,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        logging_obj=logging_obj,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\litellm_c
+ore_utils\logging_utils.py", line 237, in sync_wrapper
+    result = func(*args, **kwargs)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\llms\open
+ai\openai.py", line 502, in make_sync_openai_chat_completion_reque
+st
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\llms\open
+ai\openai.py", line 477, in make_sync_openai_chat_completion_reque
+st
+    raw_response = openai_client.chat.completions.with_raw_respons
+e.create(
+        **data, timeout=timeout
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\openai\_legacy_re
+sponse.py", line 364, in wrapped
+    return cast(LegacyAPIResponse[R], func(*args, **kwargs))
+                                      ~~~~^^^^^^^^^^^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\openai\_utils\_ut
+ils.py", line 286, in wrapper
+    return func(*args, **kwargs)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\openai\resources\
+chat\completions\completions.py", line 1192, in create
+    return self._post(
+           ~~~~~~~~~~^
+        "/chat/completions",
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<47 lines>...
+        stream_cls=Stream[ChatCompletionChunk],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\openai\_base_clie
+nt.py", line 1297, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stre
+am, stream_cls=stream_cls))
+                           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\openai\_base_clie
+nt.py", line 1070, in request
+    raise self._make_status_error_from_response(err.response) from
+ None
+openai.BadRequestError: Error code: 400 - {'error': {'code': 'Miss
+ingParameter', 'message': 'The request failed because it is missin
+g `tools.function` parameter. Request id: 02177122740238666d4fff57
+f472cc97f9dc7178d7aa5263f217a', 'param': 'tools.function', 'type':
+ 'BadRequest'}}
+
+During handling of the above exception, another exception occurred
+:
+
+Traceback (most recent call last):
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\main.py",
+ line 2594, in completion
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\main.py",
+ line 2566, in completion
+    response = openai_chat_completions.completion(
+        model=model,
+    ...<16 lines>...
+        shared_session=shared_session,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\llms\open
+ai\openai.py", line 855, in completion
+    raise OpenAIError(
+    ...<4 lines>...
+    )
+litellm.llms.openai.common_utils.OpenAIError: Error code: 400 - {'
+error': {'code': 'MissingParameter', 'message': 'The request faile
+d because it is missing `tools.function` parameter. Request id: 02
+177122740238666d4fff57f472cc97f9dc7178d7aa5263f217a', 'param': 'to
+ols.function', 'type': 'BadRequest'}}
+
+During handling of the above exception, another exception occurred
+:
+
+Traceback (most recent call last):
+  File "D:\SOFTWARE\AI-Lab\scripts\test_cko_kimi.py", line 36, in 
+test_cko
+    result = crew.kickoff()
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\crew.py", 
+line 743, in kickoff
+    result = self._run_sequential_process()
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\crew.py", 
+line 1150, in _run_sequential_process
+    return self._execute_tasks(self.tasks)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\crew.py", 
+line 1236, in _execute_tasks
+    task_output = task.execute_sync(
+        agent=exec_data.agent,
+        context=context,
+        tools=exec_data.tools,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\task.py", 
+line 499, in execute_sync
+    return self._execute_core(agent, context, tools)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\task.py", 
+line 740, in _execute_core
+    raise e  # Re-raise the exception after emitting the event
+    ^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\task.py", 
+line 671, in _execute_core
+    result = agent.execute_task(
+        task=self,
+        context=context,
+        tools=tools,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core
+.py", line 481, in execute_task
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core
+.py", line 459, in execute_task
+    result = self._execute_without_timeout(task_prompt, task)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core
+.py", line 568, in _execute_without_timeout
+    return self.agent_executor.invoke(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        {
+        ^
+    ...<4 lines>...
+        }
+        ^
+    )["output"]
+    ^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agents\cre
+w_agent_executor.py", line 207, in invoke
+    formatted_answer = self._invoke_loop()
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agents\cre
+w_agent_executor.py", line 308, in _invoke_loop
+    return self._invoke_loop_react()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agents\cre
+w_agent_executor.py", line 429, in _invoke_loop_react
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agents\cre
+w_agent_executor.py", line 337, in _invoke_loop_react
+    answer = get_llm_response(
+        llm=self.llm,
+    ...<7 lines>...
+        verbose=self.agent.verbose,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\utilities\
+agent_utils.py", line 372, in get_llm_response
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\utilities\
+agent_utils.py", line 362, in get_llm_response
+    answer = llm.call(
+        messages,
+    ...<5 lines>...
+        response_model=response_model,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\llm.py", l
+ine 1719, in call
+    result = self._handle_non_streaming_response(
+        params=params,
+    ...<4 lines>...
+        response_model=response_model,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\llm.py", l
+ine 1169, in _handle_non_streaming_response
+==================================================
+    response = litellm.completion(**params)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\utils.py"
+, line 1748, in wrapper
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\utils.py"
+, line 1569, in wrapper
+    result = original_function(*args, **kwargs)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\main.py",
+ line 4305, in completion
+    raise exception_type(
+          ~~~~~~~~~~~~~~^
+        model=model,
+        ^^^^^^^^^^^^
+    ...<3 lines>...
+        extra_kwargs=kwargs,
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\litellm_c
+ore_utils\exception_mapping_utils.py", line 2398, in exception_typ
+e
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\litellm\litellm_c
+ore_utils\exception_mapping_utils.py", line 507, in exception_type
+    raise BadRequestError(
+    ...<5 lines>...
+    )
+litellm.exceptions.BadRequestError: litellm.BadRequestError: OpenA
+IException - The request failed because it is missing `tools.funct
+ion` parameter. Request id: 02177122740238666d4fff57f472cc97f9dc71
+78d7aa5263f217a

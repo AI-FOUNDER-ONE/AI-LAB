@@ -1,0 +1,363 @@
+﻿==================================================
+娴嬭瘯 PM (grok-4-0709)
+==================================================
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃殌 Crew Execution Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Crew Execution Started                                                     鈹?
+鈹? Name:                                                                      鈹?
+鈹? crew                                                                       鈹?
+鈹? ID:                                                                        鈹?
+鈹? 80a6d1e8-4f6d-4d0e-b02d-d8e9faf48544                                       鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃搵 Task Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Task Started                                                               鈹?
+鈹? Name: Say 'PM working' in Chinese                                          鈹?
+鈹? ID: fc6e82e6-40e1-481f-8bee-b6bf604a56d6                                   鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃 Agent Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Agent: PM                                                                  鈹?
+鈹?                                                                            鈹?
+鈹? Task: Say 'PM working' in Chinese                                          鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鉂?LLM Error 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? LLM Call Failed                                                            鈹?
+鈹? Error: litellm.BadRequestError: OpenAIException - Error code: 400 -        鈹?
+鈹? {'code': 'Client specified an invalid argument', 'error': 'Model           鈹?
+鈹? grok-4-0709 does not support parameter stop.'}                             鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃搵 Task Failure 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Task Failed                                                                鈹?
+鈹? Name:                                                                      鈹?
+鈹? Say 'PM working' in Chinese                                                鈹?
+鈹? Agent:                                                                     鈹?
+鈹? PM                                                                         鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+
+PM FAILED: litellm.BadRequestError: OpenAIException - Error code: 400 - {'code': 'Client specified an invalid argument', 'error': 'Model grok-4-0709 does not support parameter stop.'}
+
+==================================================
+娴嬭瘯 Coder (claude-opus-4-6)
+==================================================
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Crew Failure 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Crew Execution Failed                                                      鈹?
+鈹? Name:                                                                      鈹?
+鈹? crew                                                                       鈹?
+鈹? ID:                                                                        鈹?
+鈹? 80a6d1e8-4f6d-4d0e-b02d-d8e9faf48544                                       鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Tracing Status 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Info: Tracing is disabled.                                                 鈹?
+鈹?                                                                            鈹?
+鈹? To enable tracing, do any one of these:                                    鈹?
+鈹? 鈥?Set tracing=True in your Crew/Flow code                                  鈹?
+鈹? 鈥?Set CREWAI_TRACING_ENABLED=true in your project's .env file              鈹?
+鈹? 鈥?Run: crewai traces enable                                                鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃殌 Crew Execution Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Crew Execution Started                                                     鈹?
+鈹? Name:                                                                      鈹?
+鈹? crew                                                                       鈹?
+鈹? ID:                                                                        鈹?
+鈹? dc131fe9-f318-4f90-94f3-e7306f05e8b9                                       鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃搵 Task Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Task Started                                                               鈹?
+鈹? Name: Say 'Coder working' in Chinese                                       鈹?
+鈹? ID: b42ac2c6-fe6f-4d6a-a5c9-6298ebcc2266                                   鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+python : ERROR:root:Anthropic API call failed: "Could not resolve authent
+ication method. Expected either api_key or auth_token to be set. Or for o
+ne of the `X-Api-Key` or `Authorization` headers to be explicitly omitted
+"
+所在位置 行:1 字符: 32
++ ... ENCODING="utf-8"; python scripts/test_pm_coder_crewai.py 2>&1 | Out
+-F ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR:root:Anth...ic    itly
+ omitted":String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[91mAn unknown error occurred. Please check the details below.[0m
+[91mError details: "Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"[0m
+[91mAn unknown error occurred. Please check the details below.[0m
+[91mError details: "Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"[0m
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鉂?LLM Error 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? LLM Call Failed                                                            鈹?
+鈹? Error: Anthropic API call failed: "Could not resolve authentication        鈹?
+鈹? method. Expected either api_key or auth_token to be set. Or for one of     鈹?
+鈹? the `X-Api-Key` or `Authorization` headers to be explicitly omitted"       鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃 Agent Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Agent: Coder                                                               鈹?
+鈹?                                                                            鈹?
+ERROR:root:Anthropic API call failed: "Could not resolve authentication m
+ethod. Expected either api_key or auth_token to be set. Or for one of the
+ `X-Api-Key` or `Authorization` headers to be explicitly omitted"
+鈹? Task: [91mAn unknown error occurred. Please check the details below.[0m
+[91mError details: "Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"[0m
+[91mAn unknown error occurred. Please check the details below.[0m
+[91mError details: "Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"[0m
+Say 'Coder working' in Chinese                                       鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃 Agent Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Agent: Coder                                                               鈹?
+鈹?                                                                            鈹?
+鈹? Task: Say 'Coder working' in Chinese                                       鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鉂?LLM Error 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? LLM Call Failed                                                            鈹?
+鈹? Error: Anthropic API call failed: "Could not resolve authentication        鈹?
+鈹? method. Expected either api_key or auth_token to be set. Or for one of     鈹?
+鈹? the `X-Api-Key` or `Authorization` headers to be explicitly omitted"       鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+
+
+ERROR:root:Anthropic API call failed: "Could not resolve authentication m
+ethod. Expected either api_key or auth_token to be set. Or for one of the
+ `X-Api-Key` or `Authorization` headers to be explicitly omitted"
+[91mAn unknown error occurred. Please check the details below.[0m
+[91mError details: "Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"[0m
+[91mAn unknown error occurred. Please check the details below.[0m
+[91mError details: "Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"[0m
+[CrewAIEventsBus鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃 Agent Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹俔                                                                             鈹?
+鈹? Agent: Coder                                                               鈹?
+ Warning: Event pairing mismatch. 'task_failed'鈹?                                                                            鈹?closed 
+'agent_execution_started'
+鈹? Task: Say 'Coder working' in Chinese                                       鈹?
+鈹?                                                                            鈹?(expected 'task_started')
+
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鉂?LLM Error 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? LLM Call Failed                                                            鈹?
+鈹? Error: Anthropic API call failed: "Could not resolve authentication        鈹?
+鈹? method. Expected either api_key or auth_token to be set. Or for one of     鈹?
+鈹? the `X-Api-Key` or `Authorization` headers to be explicitly omitted"       鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+[鈹屸攢CrewAIEventsBus] Warning: Event pairing mismatch. 'crew_kickoff_failed' closed
+鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€'agent_execution_started' (expected 'crew_kickoff_started')
+ 馃搵 Task Failure 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Task Failed                                                                鈹?
+鈹? Name:                                                                      鈹?
+鈹? Say 'Coder working' in Chinese                                             鈹?
+鈹? Agent:                                                                     鈹?
+鈹? Coder                                                                      鈹?
+鈹?                                                                            鈹?
+Coder FAILED: "Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"
+
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Crew Failure 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Crew Execution Failed                                                      鈹?
+鈹? Name:                                                                      鈹?
+鈹? crew                                                                       鈹?
+鈹? ID:                                                                        鈹?
+鈹? dc131fe9-f318-4f90-94f3-e7306f05e8b9                                       鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Tracing Status 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Info: Tracing is disabled.                                                 鈹?
+鈹?                                                                            鈹?
+鈹? To enable tracing, do any one of these:                                    鈹?
+鈹? 鈥?Set tracing=True in your Crew/Flow code                                  鈹?
+鈹? 鈥?Set CREWAI_TRACING_ENABLED=true in your project's .env file              鈹?
+鈹? 鈥?Run: crewai traces enable                                                鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+Traceback (most recent call last):
+  File "D:\SOFTWARE\AI-Lab\scripts\test_pm_coder_crewai.py", line 31, in 
+<module>
+    r2 = crew2.kickoff()
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\crew.py", line 74
+3, in kickoff
+    result = self._run_sequential_process()
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\crew.py", line 11
+50, in _run_sequential_process
+    return self._execute_tasks(self.tasks)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\crew.py", line 12
+36, in _execute_tasks
+    task_output = task.execute_sync(
+        agent=exec_data.agent,
+        context=context,
+        tools=exec_data.tools,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\task.py", line 49
+9, in execute_sync
+    return self._execute_core(agent, context, tools)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\task.py", line 74
+0, in _execute_core
+    raise e  # Re-raise the exception after emitting the event
+    ^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\task.py", line 67
+1, in _execute_core
+    result = agent.execute_task(
+        task=self,
+        context=context,
+        tools=tools,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core.py", l
+ine 493, in execute_task
+    result = self.execute_task(task, context, tools)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core.py", l
+ine 493, in execute_task
+    result = self.execute_task(task, context, tools)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core.py", l
+ine 492, in execute_task
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core.py", l
+ine 459, in execute_task
+    result = self._execute_without_timeout(task_prompt, task)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core.py", l
+ine 568, in _execute_without_timeout
+    return self.agent_executor.invoke(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        {
+        ^
+    ...<4 lines>...
+        }
+        ^
+    )["output"]
+    ^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agents\crew_agent
+_executor.py", line 207, in invoke
+    formatted_answer = self._invoke_loop()
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agents\crew_agent
+_executor.py", line 308, in _invoke_loop
+    return self._invoke_loop_react()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agents\crew_agent
+_executor.py", line 442, in _invoke_loop_react
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agents\crew_agent
+_executor.py", line 337, in _invoke_loop_react
+    answer = get_llm_response(
+        llm=self.llm,
+    ...<7 lines>...
+        verbose=self.agent.verbose,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\utilities\agent_u
+tils.py", line 372, in get_llm_response
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\utilities\agent_u
+tils.py", line 362, in get_llm_response
+    answer = llm.call(
+        messages,
+    ...<5 lines>...
+        response_model=response_model,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\llms\providers\an
+thropic\completion.py", line 305, in call
+    return self._handle_completion(
+           ~~~~~~~~~~~~~~~~~~~~~~~^
+        completion_params,
+        ^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        effective_response_model,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\llms\providers\an
+thropic\completion.py", line 673, in _handle_completion
+    raise e from e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\llms\providers\an
+thropic\completion.py", line 667, in _handle_completion
+    response = self.client.messages.create(**params)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\anthropic\_utils\_utils.
+py", line 282, in wrapper
+    return func(*args, **kwargs)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\anthropic\resources\mess
+ages\messages.py", line 972, in create
+    return self._post(
+           ~~~~~~~~~~^
+        "/v1/messages",
+        ^^^^^^^^^^^^^^^
+    ...<28 lines>...
+        stream_cls=Stream[RawMessageStreamEvent],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\anthropic\_base_client.p
+y", line 1364, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, str
+eam_cls=stream_cls))
+                           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\anthropic\_base_client.p
+y", line 1058, in request
+    request = self._build_request(options, retries_taken=retries_taken)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\anthropic\_base_client.p
+y", line 521, in _build_request
+    headers = self._build_headers(options, retries_taken=retries_taken)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\anthropic\_base_client.p
+y", line 451, in _build_headers
+    self._validate_headers(headers_dict, custom_headers)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\anthropic\_client.py", l
+ine 196, in _validate_headers
+    raise TypeError(
+        '"Could not resolve authentication method. Expected either api_ke
+y or auth_token to be set. Or for one of the `X-Api-Key` or `Authorizatio
+n` headers to be explicitly omitted"'
+    )
+TypeError: "Could not resolve authentication method. Expected either api_
+key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorizat
+ion` headers to be explicitly omitted"
+ERROR:crewai.telemetry.telemetry:('Connection aborted.', ConnectionAborte
+dError(10053, '浣犵殑涓绘満涓殑杞欢涓浜嗕竴涓凡寤虹珛鐨勮繛鎺ャ€?, None, 10053, None))
+ERROR:crewai.telemetry.telemetry:HTTPSConnectionPool(host='telemetry.crew
+ai.com', port=4319): Max retries exceeded with url: /v1/traces (Caused by
+ SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurre
+d in violation of protocol (_ssl.c:1032)')))

@@ -1,0 +1,30 @@
+{
+  "session_id": "20260214_014508",
+  "created_at": "2026-02-14T01:45:08.099710",
+  "updated_at": "2026-02-14T01:45:08.099710",
+  "user_intent": "询问他们做好准备了吗",
+  "state": "IDLE",
+  "mission_protocol": null,
+  "cko_logs": [
+    {
+      "timestamp": "2026-02-14T01:45:08.100503",
+      "role": "user",
+      "content": "询问他们做好准备了吗"
+    },
+    {
+      "timestamp": "2026-02-14T01:45:15.707059",
+      "role": "CKO",
+      "content": "⚠️ 错误: 400 API Key not found. Please pass a valid API key. [reason: \"API_KEY_INVALID\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"generativelanguage.googleapis.com\"\n}\n, locale: \"en-US\"\nmessage: \"API Key not found. Please pass a valid API key.\"\n]"
+    }
+  ],
+  "meeting_logs": [],
+  "final_code": "",
+  "test_reports": [],
+  "timeline_events": [
+    {
+      "timestamp": "2026-02-14T01:45:08.100179",
+      "state": "GROUNDING",
+      "description": "开始需求打磨"
+    }
+  ]
+}

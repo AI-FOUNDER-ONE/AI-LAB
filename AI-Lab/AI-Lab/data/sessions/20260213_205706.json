@@ -1,0 +1,30 @@
+{
+  "session_id": "20260213_205706",
+  "created_at": "2026-02-13T20:57:06.151060",
+  "updated_at": "2026-02-13T20:57:06.151060",
+  "user_intent": "告诉我西双版纳哪里的别墅最值得购买  除一份文字的分析报告",
+  "state": "IDLE",
+  "mission_protocol": null,
+  "cko_logs": [
+    {
+      "timestamp": "2026-02-13T20:57:06.151793",
+      "role": "user",
+      "content": "告诉我西双版纳哪里的别墅最值得购买  除一份文字的分析报告"
+    },
+    {
+      "timestamp": "2026-02-13T20:57:06.434314",
+      "role": "CKO",
+      "content": "⚠️ 错误: 请安装 zhipuai: pip install zhipuai"
+    }
+  ],
+  "meeting_logs": [],
+  "final_code": "",
+  "test_reports": [],
+  "timeline_events": [
+    {
+      "timestamp": "2026-02-13T20:57:06.151543",
+      "state": "GROUNDING",
+      "description": "开始需求打磨"
+    }
+  ]
+}

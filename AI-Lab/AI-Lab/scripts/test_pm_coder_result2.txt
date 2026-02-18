@@ -1,0 +1,384 @@
+﻿python : [92m14:25:51 - LiteLLM:WARNING[0m: get_model_cost_map.p
+y:174 - LiteLLM: Failed to fetch remote model cost map from https:
+//raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_
+context_window.json: _ssl.c:1015: The handshake operation timed ou
+t. Falling back to local backup.
+所在位置 行:1 字符: 32
++ ... ENCODING="utf-8"; python scripts/test_pm_coder_crewai.py 2>&
+1 | Out-F ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~
+    + CategoryInfo          : NotSpecified: ([92m14:25:51 -...o  
+   local backup.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+==================================================
+娴嬭瘯 PM (grok-4-0709)
+==================================================
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃殌 Crew Execution Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Crew Execution Started                                                     鈹?
+鈹? Name:                                                                      鈹?
+鈹? crew                                                                       鈹?
+鈹? ID:                                                                        鈹?
+鈹? 49454fd9-0792-4e82-9733-69f8d452796b                                       鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃搵 Task Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Task Started                                                               鈹?
+鈹? Name: Say 'PM working' in Chinese                                          鈹?
+鈹? ID: 5e6dbc62-c69f-4cc4-9953-77aab2f7b206                                   鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃 Agent Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Agent: PM                                                                  鈹?
+鈹?                                                                            鈹?
+鈹? Task: Say 'PM working' in Chinese                                          鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鉂?LLM Error 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? LLM Call Failed                                                            鈹?
+鈹? Error: litellm.BadRequestError: OpenAIException - Error code: 400 -        鈹?
+鈹? {'code': 'Client specified an invalid argument', 'error': 'Model           鈹?
+鈹? grok-4-0709 does not support parameter stop.'}                             鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃搵 Task Failure 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Task Failed                                                                鈹?
+鈹? Name:                                                                      鈹?
+鈹? Say 'PM working' in Chinese                                                鈹?
+鈹? Agent:                                                                     鈹?
+鈹? PM                                                                         鈹?
+鈹?                                                                            鈹?
+鈹?
+PM FAILED: litellm.BadRequestError: OpenAIException - Error code: 400 - {'code': 'Client specified an invalid argument', 'error': 'Model grok-4-0709 does not support parameter stop.'}
+
+==================================================
+娴嬭瘯 Coder (claude-opus-4-6)
+==================================================
+                                                                             鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Crew Failure 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Crew Execution Failed                                                      鈹?
+鈹? Name:                                                                      鈹?
+鈹? crew                                                                       鈹?
+鈹? ID:                                                                        鈹?
+鈹? 49454fd9-0792-4e82-9733-69f8d452796b                                       鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Tracing Status 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Info: Tracing is disabled.                                                 鈹?
+鈹?                                                                            鈹?
+鈹? To enable tracing, do any one of these:                                    鈹?
+鈹? 鈥?Set tracing=True in your Crew/Flow code                                  鈹?
+鈹? 鈥?Set CREWAI_TRACING_ENABLED=true in your project's .env file              鈹?
+鈹? 鈥?Run: crewai traces enable                                                鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃殌 Crew Execution Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Crew Execution Started                                                     鈹?
+鈹? Name:                                                                      鈹?
+鈹? crew                                                                       鈹?
+鈹? ID:                                                                        鈹?
+鈹? 2949d44b-e0b6-46b5-aeb9-625ec44618ba                                       鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃搵 Task Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Task Started                                                               鈹?
+鈹? Name: Say 'Coder working' in Chinese                                       鈹?
+鈹? ID: 33aa98de-2798-4a5c-861c-6069583b2e2e                                   鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃 Agent Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Agent: Coder                                                               鈹?
+鈹?                                                                            鈹?
+鈹? Task: Say 'Coder working' in Chinese                                       鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+ERROR:root:Anthropic API call failed: Error code: 500 - {'type': '
+upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐? Mism
+atch type []types.AnthropicSystemMessage with value string \\"at i
+ndex 387: mismatched type with value\\\\n\\\\n\\\\t:false,\\\\\\"s
+ystem\\\\\\":\\\\\\"You are Coder. \\\\n\\\\t................^....
+...........\\\\n\\"","type":"invalid_request_error"},"type":"error
+"}'}
+[91mAn unknown error occurred. Please check the details below.[0m
+[91mError details: Error code: 500 - {'type': 'upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐? Mismatch type []types.AnthropicSystemMessage with value string \\"at index 387: mismatched type with value\\\\n\\\\n\\\\t:false,\\\\\\"system\\\\\\":\\\\\\"You are Coder. \\\\n\\\\t................^...............\\\\n\\"","type":"invalid_request_error"},"type":"error"}'}[0m
+[91mAn unknown error occurred. Please check the details below.[0m
+[91mError details: Error code: 500 - {'type': 'upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐? Mismatch type []types.AnthropicSystemMessage with value string \\"at index 387: mismatched type with value\\\\n\\\\n\\\\t:false,\\\\\\"system\\\\\\":\\\\\\"You are Coder. \\\\n\\\\t................^...............\\\\n\\"","type":"invalid_request_error"},"type":"error"}'}[0m
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鉂?LLM Error 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? LLM Call Failed                                                            鈹?
+鈹? Error: Anthropic API call failed: Error code: 500 - {'type':               鈹?
+鈹? 'upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐?         鈹?
+鈹? Mismatch type []types.AnthropicSystemMessage with value string \\"at       鈹?
+鈹? index 387: mismatched type with                                            鈹?
+鈹? value\\\\n\\\\n\\\\t:false,\\\\\\"system\\\\\\":\\\\\\"You are Coder.      鈹?
+鈹? \\\\n\\\\t................^...............\\\\n\\"","type":"invalid_reque  鈹?
+鈹? st_error"},"type":"error"}'}                                               鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃 Agent Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Agent: Coder                                                               鈹?
+鈹?                                                                            鈹?
+鈹? Task: Say 'Coder working' in Chinese                                       鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+ERROR:crewai.telemetry.telemetry:HTTPSConnectionPool(host='telemet
+ry.crewai.com', port=4319): Max retries exceeded with url: /v1/tra
+ces (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE
+_READING] EOF occurred in violation of protocol (_ssl.c:1032)')))
+ERROR:root:Anthropic API call failed: Error code: 500 - {'type': '
+upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐? Mism
+atch type []types.AnthropicSystemMessage with value string \\"at i
+ndex 647: mismatched type with value\\\\n\\\\n\\\\t:false,\\\\\\"s
+ystem\\\\\\":\\\\\\"You are Coder. \\\\n\\\\t................^....
+...........\\\\n\\"","type":"invalid_request_error"},"type":"error
+"}'}
+[91mAn unknown error occurred. Please check the details below.[0m
+[91mError details: Error code: 500 - {'type': 'upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐? Mismatch type []types.AnthropicSystemMessage with value string \\"at index 647: mismatched type with value\\\\n\\\\n\\\\t:false,\\\\\\"system\\\\\\":\\\\\\"You are Coder. \\\\n\\\\t................^...............\\\\n\\"","type":"invalid_request_error"},"type":"error"}'}[0m
+[91mAn unknown error occurred. Please check the details below.[0m
+[91mError details: Error code: 500 - {'type': 'upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐? Mismatch type []types.AnthropicSystemMessage with value string \\"at index 647: mismatched type with value\\\\n\\\\n\\\\t:false,\\\\\\"system\\\\\\":\\\\\\"You are Coder. \\\\n\\\\t................^...............\\\\n\\"","type":"invalid_request_error"},"type":"error"}'}[0m
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鉂?LLM Error 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? LLM Call Failed                                                            鈹?
+鈹? Error: Anthropic API call failed: Error code: 500 - {'type':               鈹?
+鈹? 'upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐?         鈹?
+鈹? Mismatch type []types.AnthropicSystemMessage with value string \\"at       鈹?
+鈹? index 647: mismatched type with                                            鈹?
+鈹? value\\\\n\\\\n\\\\t:false,\\\\\\"system\\\\\\":\\\\\\"You are Coder.      鈹?
+鈹? \\\\n\\\\t................^...............\\\\n\\"","type":"invalid_reque  鈹?
+鈹? st_error"},"type":"error"}'}                                               鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃 Agent Started 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Agent: Coder                                                               鈹?
+鈹?                                                                            鈹?
+鈹? Task: Say 'Coder working' in Chinese                                       鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+ERROR:root:Anthropic API call failed: Error code: 500 - {'type': '
+upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐? Mism
+atch type []types.AnthropicSystemMessage with value string \\"at i
+ndex 907: mismatched type with value\\\\n\\\\n\\\\t:false,\\\\\\"s
+ystem\\\\\\":\\\\\\"You are Coder. \\\\n\\\\t................^....
+...........\\\\n\\"","type":"invalid_request_error"},"type":"error
+"}'}
+[91mAn unknown error occurred. Please check the details below.[0m
+[91mError details: Error code: 500 - {'type': 'upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐? Mismatch type []types.AnthropicSystemMessage with value string \\"at index 907: mismatched type with value\\\\n\\\\n\\\\t:false,\\\\\\"system\\\\\\":\\\\\\"You are Coder. \\\\n\\\\t................^...............\\\\n\\"","type":"invalid_request_error"},"type":"error"}'}[0m
+[91mAn unknown error occurred. Please check the details below.[0m
+[91mError details: Error code: 500 - {'type': 'upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐? Mismatch type []types.AnthropicSystemMessage with value string \\"at index 907: mismatched type with value\\\\n\\\\n\\\\t:false,\\\\\\"system\\\\\\":\\\\\\"You are Coder. \\\\n\\\\t................^...............\\\\n\\"","type":"invalid_request_error"},"type":"error"}'}[0m
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 鉂?LLM Error 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€[CrewAIEventsBus]鈹€鈹?
+ Warning: Event pairing mismatch. 'task_failed' closed 
+'agent_execution_started' (expected 'task_started')
+鈹?                                                                            鈹?
+鈹俒CrewAIEventsBus] Warning: Event pairing mismatch.   'crew_kickoff_failed' closed
+'agent_execution_started' (expected 'crew_kickoff_started')
+LLM Call Failed                                                            鈹?
+
+Coder FAILED: Error code: 500 - {'type': 'upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐? Mismatch type []types.AnthropicSystemMessage with value string \\"at index 907: mismatched type with value\\\\n\\\\n\\\\t:false,\\\\\\"system\\\\\\":\\\\\\"You are Coder. \\\\n\\\\t................^...............\\\\n\\"","type":"invalid_request_error"},"type":"error"}'}
+鈹? Error: Anthropic API call failed: Error code: 500 - {'type':               鈹?
+鈹? 'upstream_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐?         鈹?
+鈹? Mismatch type []types.AnthropicSystemMessage with value string \\"at       鈹?
+鈹? index 907: mismatched type with                                            鈹?
+鈹? value\\\\n\\\\n\\\\t:false,\\\\\\"system\\\\\\":\\\\\\"You are Coder.      鈹?
+鈹? \\\\n\\\\t................^...............\\\\n\\"","type":"invalid_reque  鈹?
+鈹? st_error"},"type":"error"}'}                                               鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ 馃搵 Task Failure 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Task Failed                                                                鈹?
+Traceback (most recent call last):
+鈹? Name:                                                                      鈹?
+鈹? Say 'Coder working' in Chinese                                             鈹?
+鈹? Agent:                                                                     鈹?
+  File "D:\SOFTWARE\AI-Lab\scripts\test_pm_coder_crewai.py", line 
+31, in <module>
+    r2 = crew2.kickoff()
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\crew.py", 
+line 743, in kickoff
+    result = self._run_sequential_process()
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\crew.py", 
+line 1150, in _run_sequential_process
+    return self._execute_tasks(self.tasks)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\crew.py", 
+line 1236, in _execute_tasks
+    task_output = task.execute_sync(
+        agent=exec_data.agent,
+        context=context,
+        tools=exec_data.tools,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\task.py", 
+line 499, in execute_sync
+    return self._execute_core(agent, context, tools)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\task.py", 
+line 740, in _execute_core
+    raise e  # Re-raise the exception after emitting the event
+    ^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\task.py", 
+line 671, in _execute_core
+    result = agent.execute_task(
+        task=self,
+        context=context,
+        tools=tools,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core
+.py", line 493, in execute_task
+    result = self.execute_task(task, context, tools)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core
+.py", line 493, in execute_task
+    result = self.execute_task(task, context, tools)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core
+.py", line 492, in execute_task
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core
+.py", line 459, in execute_task
+    result = self._execute_without_timeout(task_prompt, task)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agent\core
+.py", line 568, in _execute_without_timeout
+    return self.agent_executor.invoke(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        {
+        ^
+    ...<4 lines>...
+        }
+        ^
+    )["output"]
+    ^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agents\cre
+w_agent_executor.py", line 207, in invoke
+    formatted_answer = self._invoke_loop()
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agents\cre
+w_agent_executor.py", line 308, in _invoke_loop
+    return self._invoke_loop_react()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agents\cre
+w_agent_executor.py", line 442, in _invoke_loop_react
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\agents\cre
+w_agent_executor.py", line 337, in _invoke_loop_react
+    answer = get_llm_response(
+        llm=self.llm,
+    ...<7 lines>...
+        verbose=self.agent.verbose,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\utilities\
+agent_utils.py", line 372, in get_llm_response
+    raise e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\utilities\
+agent_utils.py", line 362, in get_llm_response
+    answer = llm.call(
+        messages,
+    ...<5 lines>...
+        response_model=response_model,
+    )
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\llms\provi
+ders\anthropic\completion.py", line 305, in call
+    return self._handle_completion(
+           ~~~~~~~~~~~~~~~~~~~~~~~^
+        completion_params,
+        ^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        effective_response_model,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\llms\provi
+ders\anthropic\completion.py", line 673, in _handle_completion
+    raise e from e
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\crewai\llms\provi
+ders\anthropic\completion.py", line 667, in _handle_completion
+    response = self.client.messages.create(**params)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\anthropic\_utils\
+_utils.py", line 282, in wrapper
+    return func(*args, **kwargs)
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\anthropic\resourc
+es\messages\messages.py", line 972, in create
+    return self._post(
+           ~~~~~~~~~~^
+        "/v1/messages",
+        ^^^^^^^^^^^^^^^
+    ...<28 lines>...
+        stream_cls=Stream[RawMessageStreamEvent],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\anthropic\_base_c
+lient.py", line 1364, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stre
+am, stream_cls=stream_cls))
+                           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SOFTWARE\miniconda3\Lib\site-packages\anthropic\_base_c
+lient.py", line 1137, in request
+    raise self._make_status_error_from_response(err.response) from
+ None
+anthropic.InternalServerError: Error code: 500 - {'type': 'upstrea
+m_error', 'message': '{"error":{"message":"瑙ｆ瀽璇锋眰浣撳け璐? Mismatch ty
+pe []types.AnthropicSystemMessage with value string \\"at index 90
+7: mismatched type with value\\\\n\\\\n\\\\t:false,\\\\\\"system\\
+\\\\":\\\\\\"You are Coder. \\\\n\\\\t................^...........
+....\\\\n\\"","type":"invalid_request_error"},"type":"error"}'}
+鈹? Coder                                                                      鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Crew Failure 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Crew Execution Failed                                                      鈹?
+鈹? Name:                                                                      鈹?
+鈹? crew                                                                       鈹?
+鈹? ID:                                                                        鈹?
+鈹? 2949d44b-e0b6-46b5-aeb9-625ec44618ba                                       鈹?
+鈹?                                                                            鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+
+
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ Tracing Status 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹?                                                                            鈹?
+鈹? Info: Tracing is disabled.                                                 鈹?
+鈹?                                                                            鈹?
+鈹? To enable tracing, do any one of these:                                    鈹?
+鈹? 鈥?Set tracing=True in your Crew/Flow code                                  鈹?
+鈹? 鈥?Set CREWAI_TRACING_ENABLED=true in your project's .env file              鈹?
+鈹? 鈥?Run: crewai traces enable                                                鈹?
+鈹?                                                                            鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+ERROR:crewai.telemetry.telemetry:HTTPSConnectionPool(host='telemet
+ry.crewai.com', port=4319): Max retries exceeded with url: /v1/tra
+ces (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE
+_READING] EOF occurred in violation of protocol (_ssl.c:1032)')))

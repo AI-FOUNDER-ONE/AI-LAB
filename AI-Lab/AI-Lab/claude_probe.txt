@@ -1,0 +1,4 @@
+FAIL: https://yunyi.rdzhvip.com/claude / claude-opus-4-20250602 -> Cannot POST /claude/chat/completions
+FAIL: https://yunyi.rdzhvip.com/claude / claude-opus-4-6 -> Cannot POST /claude/chat/completions
+FAIL: https://yunyi.rdzhvip.com / claude-opus-4-6 -> Cannot POST /chat/completions
+FAIL: https://yunyi.rdzhvip.com / claude-opus-4-20250602 -> Cannot POST /chat/completions

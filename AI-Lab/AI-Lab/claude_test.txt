@@ -1,0 +1,4 @@
+FAIL: https://yunyi.rdzhvip.com/claude / claude-sonnet-4-20250514 -> Cannot POST /claude/chat/completions
+FAIL: https://yunyi.rdzhvip.com/claude / claude-3-5-sonnet-20241022 -> Cannot POST /claude/chat/completions
+FAIL: https://yunyi.rdzhvip.com / claude-sonnet-4-20250514 -> Cannot POST /chat/completions
+FAIL: https://yunyi.rdzhvip.com / claude-3-5-sonnet-20241022 -> Cannot POST /chat/completions

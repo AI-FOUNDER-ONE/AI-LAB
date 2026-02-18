@@ -1,0 +1,10 @@
+graph TD
+    A[用户请求] --> B[CKO 分析]
+    B --> C[PM 主持辩论]
+    C --> D[Arch 架构设计]
+    C --> E[Designer 详细设计]
+    D --> F[Coder 编码]
+    E --> F
+    F --> G[Tester 验证]
+    G -->|通过| H[交付]
+    G -->|失败| C

@@ -1,0 +1,30 @@
+{
+  "session_id": "20260213_000852",
+  "created_at": "2026-02-13T00:08:52.896065",
+  "updated_at": "2026-02-13T00:08:52.896065",
+  "user_intent": "你好",
+  "state": "IDLE",
+  "mission_protocol": null,
+  "cko_logs": [
+    {
+      "timestamp": "2026-02-13T00:08:52.896920",
+      "role": "user",
+      "content": "你好"
+    },
+    {
+      "timestamp": "2026-02-13T00:08:53.188928",
+      "role": "CKO",
+      "content": "⚠️ 错误: 请安装 zhipuai: pip install zhipuai"
+    }
+  ],
+  "meeting_logs": [],
+  "final_code": "",
+  "test_reports": [],
+  "timeline_events": [
+    {
+      "timestamp": "2026-02-13T00:08:52.896608",
+      "state": "GROUNDING",
+      "description": "开始需求打磨"
+    }
+  ]
+}

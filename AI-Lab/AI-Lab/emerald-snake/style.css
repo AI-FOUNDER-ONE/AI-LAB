@@ -1,0 +1,242 @@
+/* ============================================================
+ * Emerald Snake - 样式表
+ * 现代网页版贪吃蛇游戏，响应式布局 + 暗色主题
+ * ============================================================ */
+
+/* --- 全局重置与基础样式 --- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #0a0a1a;
+  color: #e0e0e0;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* --- 游戏主容器：居中布局 --- */
+#game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  padding: 10px;
+}
+
+/* --- 顶部 HUD 信息栏 --- */
+#hud {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 10px;
+  padding: 8px 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.hud-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 60px;
+}
+
+.hud-label {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.hud-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #4ade80;
+  text-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
+}
+
+/* --- Canvas 画布 --- */
+#game-canvas {
+  border-radius: 8px;
+  border: 2px solid rgba(74, 222, 128, 0.2);
+  box-shadow:
+    0 0 20px rgba(74, 222, 128, 0.1),
+    inset 0 0 40px rgba(0, 0, 0, 0.3);
+  background: #0d1117;
+  max-width: 100%;
+  max-height: 60vh;
+}
+
+/* --- 道具状态指示器 --- */
+#powerup-indicator {
+  margin-top: 8px;
+  padding: 6px 16px;
+  background: rgba(255, 200, 0, 0.15);
+  border: 1px solid rgba(255, 200, 0, 0.3);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  transition: opacity 0.3s ease;
+}
+
+#powerup-indicator.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#powerup-name {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+#powerup-timer-bar {
+  width: 80px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+#powerup-timer-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+  border-radius: 3px;
+  transition: width 0.1s linear;
+}
+
+/* --- 控制按钮栏 --- */
+#controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.ctrl-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #c0c0c0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.ctrl-btn:hover {
+  background: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+}
+
+.ctrl-btn:active {
+  transform: scale(0.95);
+}
+
+.ctrl-btn.active {
+  background: rgba(74, 222, 128, 0.2);
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
+/* --- 遮罩层（开始/暂停/结束） --- */
+#overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 26, 0.85);
+  backdrop-filter: blur(6px);
+  z-index: 10;
+  transition: opacity 0.3s ease;
+}
+
+#overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#overlay-content {
+  text-align: center;
+  animation: fadeInUp 0.4s ease;
+}
+
+#overlay-title {
+  font-size: 36px;
+  font-weight: 800;
+  color: #4ade80;
+  text-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+  margin-bottom: 12px;
+}
+
+#overlay-message {
+  font-size: 16px;
+  color: #ccc;
+  margin-bottom: 8px;
+}
+
+.sub-text {
+  font-size: 12px;
+  color: #666;
+}
+
+/* --- 动画 --- */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- 响应式适配 --- */
+@media (max-width: 600px) {
+  #hud {
+    gap: 12px;
+    padding: 6px 12px;
+  }
+
+  .hud-value {
+    font-size: 16px;
+  }
+
+  .ctrl-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  #overlay-title {
+    font-size: 26px;
+  }
+
+  #overlay-message {
+    font-size: 14px;
+  }
+}
