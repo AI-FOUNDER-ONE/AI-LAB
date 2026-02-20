@@ -103,6 +103,21 @@ class CKOAgent(BaseAgent):
                 except ImportError:
                     raise ImportError("请安装 openai: pip install openai")
 
+            elif provider == "novai":
+                try:
+                    from openai import OpenAI
+                    api_key = API_KEYS.get("novai", "")
+                    base_url = self.model_config.get("base_url", "https://once.novai.su/v1")
+                    if api_key:
+                        self._client = OpenAI(
+                            api_key=api_key,
+                            base_url=base_url,
+                        )
+                    else:
+                        print("Warning: NOVAI_API_KEY not found.")
+                except ImportError:
+                    pass
+
             elif provider == "zhipuai":
                 try:
                     from zhipuai import ZhipuAI

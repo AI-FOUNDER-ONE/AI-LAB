@@ -21,6 +21,7 @@ QMainWindow 主窗口，组装所有 UI 面板并连接信号与槽。
 import sys
 import traceback
 import os
+import logging
 
 # [FIX] Windows 平台强制 UTF-8 编码，防止 emoji 打印报错
 if sys.platform == "win32":
@@ -48,6 +49,7 @@ from PyQt6.QtGui import QFont, QAction
 
 from config import APP_TITLE, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT
 from core.orchestrator import Orchestrator
+from core.logger import setup_logging, logger
 from core.commander_crew_v2 import CommanderCrew
 from ui.bridge_panel import BridgePanel
 from ui.warroom_panel import WarRoomPanel
@@ -63,6 +65,11 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+
+        # Use global logger
+        self.logger = logger
+        self.logger.info("AI-Lab-Commander MainWindow initialized")
+
         self.setWindowTitle(APP_TITLE)
         self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
 
@@ -272,11 +279,11 @@ class MainWindow(QMainWindow):
         # ============================================================
         #  CKO Agent 输入状态 → Bridge 面板
         # ============================================================
-        self.orchestrator.cko.typing_started.connect(
-            lambda: self.bridge_panel.set_cko_typing(True)
+        self.orchestrator.ke.typing_started.connect(
+            lambda: self.bridge_panel.set_ke_typing(True)
         )
-        self.orchestrator.cko.typing_finished.connect(
-            lambda: self.bridge_panel.set_cko_typing(False)
+        self.orchestrator.ke.typing_finished.connect(
+            lambda: self.bridge_panel.set_ke_typing(False)
         )
 
         # ============================================================
@@ -328,10 +335,10 @@ class MainWindow(QMainWindow):
             self.warroom_panel.append_message(role, content, state_id=current_state)
             return
 
-        if role == "CKO":
-            # [Fix] CKO 回复 → 双向同步
+        if role == "KE":
+            # [Fix] KE 回复 → 双向同步
             # 1. 始终显示在 Bridge 面板 (确保立项主要流程完整)
-            self.bridge_panel.append_cko_response(content)
+            self.bridge_panel.append_ke_response(content)
             
             # 2. 同时显示在 War Room (作为公屏回应)
             self.warroom_panel.append_message(role, content, state_id=current_state)
@@ -339,7 +346,7 @@ class MainWindow(QMainWindow):
             # 3. Enable Confirm Button in Navbar
             self.btn_confirm_nav.setEnabled(True)
 
-        elif role in ("PM", "Arch", "Designer", "系统"):
+        elif role in ("PM", "Arch", "Designer", "系统", "QA", "Tester"):
             # 博弈阶段角色 → War Room 面板
             if role == "系统":
                 self.warroom_panel.append_system_event(content)
@@ -473,6 +480,10 @@ class MainWindow(QMainWindow):
 
 def main():
     """应用主入口"""
+    # Initialize logging system
+    logger = setup_logging(log_level=logging.INFO, log_to_file=True)
+    logger.info("Starting AI-Lab-Commander application")
+
     # 配置全局异常捕获
     def exception_hook(exctype, value, traceback_obj):
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -482,8 +493,13 @@ def main():
         # 写入日志文件
         with open("crash.log", "a", encoding="utf-8") as f:
             f.write(error_msg + "\n" + "="*80 + "\n")
-            
-        print(error_msg)
+
+        # 尝试使用logger记录（如果可用）
+        try:
+            logger.error(f"Unhandled exception: {error_msg}")
+        except:
+            # logger可能不可用，保留原始print
+            print(error_msg)
         sys.__excepthook__(exctype, value, traceback_obj)
 
     sys.excepthook = exception_hook

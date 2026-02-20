@@ -1,0 +1,5 @@
+{
+  "apiKey": "your_api_key_here",
+  "apiBaseUrl": "https://once.novai.su",
+  "hasCompletedOnboarding": true
+}

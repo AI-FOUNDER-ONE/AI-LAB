@@ -21,7 +21,8 @@ from tools.crew_tools import DocxParserTool, CodeWriterTool
 from tools.mermaid_tool import MermaidTool
 from tools.matplotlib_design_tool import MatplotlibDesignTool
 from tools.docx_generator_tool import DocxGeneratorTool
-from tools.validation_tool import ValidationTool
+from tools.docx_generator_tool import DocxGeneratorTool
+from tools.validation_tool import ValidationTool, PytestRunnerTool, TypeCheckTool
 
 # ---------- LLM 初始化工厂 ----------
 
@@ -85,7 +86,7 @@ def get_llm(role: str) -> LLM:
         return LLM(
             model=f"anthropic/{model}",
             temperature=0.7,
-            max_tokens=4096,
+            max_tokens=8000,
         )
 
     # ② xAI (Grok) — 无前缀, 走 LiteLLM 通道, 利用 drop_params 丢弃不支持的 stop 参数
@@ -97,6 +98,7 @@ def get_llm(role: str) -> LLM:
             api_key=api_key,
             base_url=base_url,
             temperature=0.7,
+            max_tokens=8000,
         )
 
     # ③ OpenAI 兼容 API (hiapi/deepseek/volcengine) — openai/ 前缀 + base_url
@@ -105,6 +107,7 @@ def get_llm(role: str) -> LLM:
         api_key=api_key,
         base_url=base_url,
         temperature=0.7,
+        max_tokens=8000,
     )
 
 
@@ -123,12 +126,12 @@ def create_agents(step_callback=None):
     """
     agents = {}
 
-    # CKO
-    agents["CKO"] = Agent(
-        role="CKO · 首席知识官",
+    # KE (Knowledge Engineer) - 原 CKO
+    agents["KE"] = Agent(
+        role="KE · 知识工程师",
         goal="深入理解用户需求，生成结构化任务协议",
         backstory=(
-            "你是一位资深的首席知识官 (CKO)，擅长需求分析和知识管理。"
+            "你是一位资深的知识工程师 (KE)，擅长需求分析和知识管理。"
             "你的核心职责是确保项目有清晰、可执行的任务协议。\n\n"
             "## War Room 交互规则\n"
             "- 当其他人讨论需求变更时，主动用 @角色名 @PM 确认是否需要更新任务协议\n"
@@ -138,8 +141,27 @@ def create_agents(step_callback=None):
             "- 明确表态时说 '我同意…' 或 '我认为需要更多信息…'"
         ),
         verbose=True,
-        llm=get_llm("CKO"),
+        llm=get_llm("KE"),
         tools=[DocxParserTool()],
+        allow_delegation=False,
+        step_callback=step_callback,
+    )
+
+    # QA (Quality Auditor) - 新增角色
+    agents["QA"] = Agent(
+        role="QA · 质量审计",
+        goal="监督辩论质量，确保方案完整性和合规性",
+        backstory=(
+            "你是一位严格的质量审计师 (QA)，负责监督项目流程和交付物质量。"
+            "你不直接产出方案，而是评估各方输出是否符合规范和安全性要求。\n\n"
+            "## War Room 交互规则\n"
+            "- 在辩论中，关注非功能性需求（安全、合规、性能）\n"
+            "- 发现方案存在风险时，主动 @PM 预警\n"
+            "- 审核 Coder 的代码和 Tester 的测试报告是否闭环\n"
+            "- 你的风格是客观、冷静、基于事实"
+        ),
+        verbose=True,
+        llm=get_llm("QA"),
         allow_delegation=False,
         step_callback=step_callback,
     )
@@ -242,11 +264,15 @@ def create_agents(step_callback=None):
             "- 测试通过时说 '测试通过 ✅' + 验证要点\n"
             "- 测试失败时说 '测试失败 ❌' + 具体问题 + 修复方向\n"
             "- 关注安全性、性能和边界条件，对每个细节都不放过\n"
-            "- 发现问题同时给出修复建议，而不是只指出问题"
+            "- 发现问题同时给出修复建议，而不是只指出问题\n"
+            "- **工具使用**：\n"
+            "  - 使用 `python_code_validator` 进行静态语法检查\n"
+            "  - 使用 `pytest_runner` 运行单元测试 (确保测试文件存在)\n"
+            "  - 使用 `mypy_checker` 进行类型检查"
         ),
         verbose=True,
         llm=get_llm("Tester"),
-        tools=[ValidationTool()],
+        tools=[ValidationTool(), PytestRunnerTool(), TypeCheckTool()],
         allow_delegation=False,
         step_callback=step_callback,
     )

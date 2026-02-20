@@ -25,6 +25,7 @@ import time
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
@@ -104,10 +105,15 @@ class PersonalityEngine:
 
     # 每个角色的风格池
     STYLE_POOL = {
-        "CKO": [
+        "KE": [
             "用学术导师口吻，温和但严谨，多用反问引导思考",
             "用简洁的列表形式总结要点，不超过 5 条",
             "用类比方式解释复杂概念，引用行业案例",
+        ],
+        "QA": [
+             "用合规审计风格，关注安全漏洞和法律风险",
+             "用流程质检风格，检查各环节输出的完整性",
+             "用防御性思维风格，假设最坏情况并提出预防措施",
         ],
         "PM": [
             "用指挥官口吻，果断决策，明确下达行动项",
@@ -208,7 +214,7 @@ class WarRoomContext:
         # 共识追踪
         self.consensus_tracker: Dict[str, str] = {
             "PM": "neutral", "Arch": "neutral", "Designer": "neutral",
-            "Coder": "neutral", "Tester": "neutral",
+            "Coder": "neutral", "Tester": "neutral", "QA": "neutral", "KE": "neutral",
         }
         # 结构化投票记录: [{role, stance, reason, round}]
         self.vote_records: List[Dict[str, Any]] = []
@@ -344,6 +350,23 @@ class WarRoomContext:
         agrees = sum(1 for s in self.consensus_tracker.values() if s == "agree")
         return (agrees / total if total > 0 else 0) >= CONSENSUS_THRESHOLD
 
+    def check_convergence(self, limit: int = 4) -> bool:
+        """检测辩论是否趋于收敛 (基于关键词密度)。"""
+        if len(self.history) < limit:
+            return False
+            
+        recent = self.history[-limit:]
+        # 关键词：同意、赞同、可行、没有异议、批准
+        agreement_keywords = ["同意", "赞同", "可行", "没有异议", "批准", "agree", "lgtm"]
+        
+        agreeing_roles = set()
+        for msg in recent:
+            if any(kw in msg.content.lower() for kw in agreement_keywords):
+                agreeing_roles.add(msg.role)
+        
+        # 如果最近 N 条中有 3 个不同角色表达同意，视为收敛
+        return len(agreeing_roles) >= 3
+
     def get_last_message(self) -> Optional[WarRoomMessage]:
         return self.history[-1] if self.history else None
 
@@ -354,9 +377,9 @@ class WarRoomContext:
         - 上限 2000 字符
         - 超长时保留 头500 + 尾1000（尾部含约束/负面清单），中间省略
         """
-        # 优先找 CKO 的第一条完整分析
+        # 优先找 KE (原 CKO) 的第一条完整分析
         for msg in self.history:
-            if msg.role == "CKO":
+            if msg.role == "KE" or msg.role == "CKO": # 兼容旧日志
                 return self._smart_compress_anchor(msg.content, max_len=2000)
 
         # 如果没找到 CKO (e.g. bypass mode), 返回最早的历史消息
@@ -387,8 +410,8 @@ class WarRoomContext:
         )
         return f"【🛡️ 原始需求锚点】\n{compressed}"
 
-    def extract_constraints(self, cko_output: str) -> List[str]:
-        """从 CKO 输出中提取结构化约束。
+    def extract_constraints(self, ke_output: str) -> List[str]:
+        """从 KE (原 CKO) 输出中提取结构化约束。
 
         匹配模式：
         - 标签格式：【约束】、【技术栈】、【禁止】、【平台】、【约束清单】
@@ -470,7 +493,7 @@ class DebateRouter:
       4. 阶段默认路由 — 根据 task_type 决定辩论顺序
     """
 
-    ALL_ROLES = ["CKO", "PM", "Arch", "Designer", "Coder", "Tester"]
+    ALL_ROLES = ["PM", "Arch", "Designer", "Coder", "Tester", "QA", "KE"]
 
     def __init__(self, ctx: WarRoomContext):
         self.ctx = ctx
@@ -480,13 +503,13 @@ class DebateRouter:
         task_type = self.ctx.task_type
 
         if task_type == "RESEARCH":
-            base_order = ["CKO", "Arch", "Designer"]
+            base_order = ["KE", "QA", ["Arch", "Designer"]]
         elif task_type == "DESIGN":
-            base_order = ["Designer", "Arch", "CKO"]
+            base_order = [["Designer", "Arch"], "QA", "KE"]
         elif task_type == "ENGINEERING":
-            base_order = ["Arch", "Designer", "Coder"]
+            base_order = [["Arch", "Designer"], "Coder", "QA"]
         else:
-            base_order = ["Arch", "Designer", "Coder"]
+            base_order = [["Arch", "Designer"], "Coder", "QA"]
 
         # 后续轮次：让反对者先说
         if round_num > 2:
@@ -682,12 +705,12 @@ class DebateWorker(QThread):
             )
         
         # [MODIFIED] 使用工厂创建任务 (必须在赋值 description 前创建)
-        grounding_task = create_grounding_task(self.agents["CKO"])
+        grounding_task = create_grounding_task(self.agents["KE"])
         
         grounding_task.description = (
             f"用户输入: {user_text}\n"
             f"{attachment_section}\n"
-            f"【任务指令】作为 CKO（首席知识官），请对用户输入进行需求分析：\n"
+            f"【任务指令】作为 KE（知识工程师），请对用户输入进行需求分析：\n"
             f"1. 如果用户上传了文档，请先完整阅读文档内容（包括表格、页眉、批注等），"
             f"然后结合用户的文字说明进行分析\n"
             f"2. 如果用户输入仅为简短问候或模糊描述，你必须：\n"
@@ -710,7 +733,7 @@ class DebateWorker(QThread):
             f"   (如用户未指定硬约束，可填写 '约束清单: 无明确约束')"
         )
         
-        crew = Crew(agents=[self.agents["CKO"]], tasks=[grounding_task],
+        crew = Crew(agents=[self.agents["KE"]], tasks=[grounding_task],
                     process=Process.sequential, verbose=True)
         result = crew.kickoff()
         response = str(result)
@@ -782,7 +805,7 @@ class DebateWorker(QThread):
             previous_speaker = "PM"  # PM 是本轮第一个发言的
             previous_content = pm_response or ""
 
-            for speaker_role in speakers:
+            for speaker_group in speakers:
                 if self._stop_flag:
                     break
 
@@ -792,6 +815,21 @@ class DebateWorker(QThread):
                     print(f"[DEBATE-V2] 🔴 检测到用户干预，中断当前发言队列，转交 PM 处理。")
                     break
 
+                # ---- 并行执行检测 ----
+                if isinstance(speaker_group, list):
+                    parallel_resps = self._execute_parallel_agents(
+                        speaker_group, round_num, previous_speaker, previous_content
+                    )
+                    # Update previous context for next group
+                    if parallel_resps:
+                        last_role = speaker_group[-1]
+                        if last_role in parallel_resps:
+                            previous_speaker = last_role
+                            previous_content = parallel_resps[last_role]
+                    continue
+
+                # ---- 串行执行 ----
+                speaker_role = speaker_group
                 PersonalityEngine.thinking_delay()
                 agent = self._get_agent_by_role(speaker_role)
                 if not agent:
@@ -866,13 +904,20 @@ class DebateWorker(QThread):
                     if self.router.should_trigger_sub_debate():
                         self._run_sub_debate(round_num)
 
+                # ---- 收敛检测 (Opt 4) ----
+                if self.ctx.check_convergence():
+                    print(f"[DEBATE-V2] ⚡ 检测到辩论收敛，提前结束本轮。")
+                    break
+
             # ---- 结构化投票 (每轮结束) ----
             if round_num >= DEBATE_MIN_ROUNDS:
                 self._execute_structured_vote(round_num)
                 if self.ctx.check_consensus():
                     print(f"\n[DEBATE-V2] ✅ 共识达成! 第 {round_num} 轮")
                     break
-            print(f"[DEBATE-V2] 共识状态: {status}")
+            # [FIX] 打印共识状态
+            consensus_ratio = sum(1 for s in self.ctx.consensus_tracker.values() if s == "agree") / len(self.ctx.consensus_tracker)
+            print(f"[DEBATE-V2] 共识进度: {consensus_ratio:.0%} (阈值: {CONSENSUS_THRESHOLD:.0%})")
 
         # ---- PM 最终裁决 (含死锁熔断) ----
         final_prompt = ""
@@ -895,6 +940,53 @@ class DebateWorker(QThread):
             self.ctx.add_message("PM", final_resp)
             self.agent_responded.emit("PM", final_resp)
         self.debate_finished.emit(self.ctx.get_stance_summary())
+
+    # ------------------------------------------------------------------
+    #  并行执行 Helper
+    # ------------------------------------------------------------------
+    def _execute_parallel_agents(self, roles: List[str], round_num: int, 
+                                previous_speaker: str, previous_content: str) -> Dict[str, str]:
+        """并行执行多个 Agent。"""
+        print(f"[DEBATE-V2] >> 并行执行: {roles}")
+        
+        # 1. Build Prompts
+        tasks = []
+        for role in roles:
+            agent = self._get_agent_by_role(role)
+            if not agent: continue
+            
+            # Note: They verify against the same previous_speaker/content
+            prompt = self._build_debate_prompt(
+                role, round_num, 
+                previous_speaker=previous_speaker,
+                previous_content=previous_content
+            )
+            tasks.append((role, agent, prompt))
+            
+        # 2. Execute in ThreadPool
+        responses = {}
+        with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+            future_to_role = {
+                executor.submit(self._execute_single_agent, agent, prompt): role
+                for role, agent, prompt in tasks
+            }
+            for future in as_completed(future_to_role):
+                role = future_to_role[future]
+                try:
+                    resp = future.result()
+                    if resp:
+                        responses[role] = resp
+                except Exception as e:
+                    print(f"Parallel execution failed for {role}: {e}")
+
+        # 3. Add to history (Fixed order for readability)
+        for role in roles:
+            if role in responses:
+                resp = responses[role]
+                self.ctx.add_message(role, resp, round_num)
+                self.agent_responded.emit(role, resp)
+                
+        return responses
 
     # ------------------------------------------------------------------
     #  结构化投票
@@ -990,6 +1082,7 @@ class DebateWorker(QThread):
             
             # [FIX] Coder 工具动态挂载
             # 确保 Coder 拥有写文件的能力
+            coder_agent = self.agents["Coder"]  # Move assignment up
             if not getattr(coder_agent, 'tools', None):
                 try:
                     from tools.crew_tools import CodeWriterTool
@@ -998,8 +1091,6 @@ class DebateWorker(QThread):
                 except Exception as e:
                     print(f"[PRODUCTION] ⚠️ 无法挂载 CodeWriterTool: {e}")
 
-            # Coder
-            coder_agent = self.agents["Coder"]
             coder_prompt = self._build_production_prompt("Coder", loop)
             coder_resp = self._execute_single_agent(coder_agent, coder_prompt)
             if coder_resp:
@@ -1215,6 +1306,26 @@ class DebateWorker(QThread):
                     "- 不要写代码！\n"
                     "- 你的职责是评估【数据获取难度】和【API 限制】。\n"
                     "- 为产品构想提供技术边界支持（'这个功能很难实现，因为没有开放API'）。\n"
+                )
+        elif role == "Arch":
+            if task_type == "RESEARCH":
+                role_guidance = (
+                    "\n【Arch 特别指令】当前是『调研阶段』，请扮演【首席分析师】。\n"
+                    "- 负责构建理论框架和分析维度。\n"
+                    "- 评估研究方法论的科学性。\n"
+                )
+            elif task_type == "DESIGN":
+                role_guidance = (
+                    "\n【Arch 特别指令】当前是『设计阶段』，请扮演【创意总监】。\n"
+                    "- 负责定义设计理念和视觉风格体系。\n"
+                    "- 确保设计方案符合品牌调性。\n"
+                )
+        elif role == "Designer":
+            if task_type == "RESEARCH":
+                role_guidance = (
+                    "\n【Designer 特别指令】当前是『调研阶段』，请扮演【数据分析师】。\n"
+                    "- 负责具体的案例搜集和数据图表规划。\n"
+                    "- 提供实证支持。\n"
                 )
 
         # ================================================================
@@ -1439,9 +1550,10 @@ class StateController(QObject):
 
     def transition(self, new_state: str):
         """切换状态并发射信号。"""
+        old_state = self.current_state
         self.current_state = new_state
         desc = self.STATE_DESC.get(new_state, new_state)
-        print(f"[STATE] {self.current_state} → {new_state}: {desc}")
+        print(f"[STATE] {old_state} → {new_state}: {desc}")
         self.state_changed.emit(new_state, desc)
 
 
@@ -1481,7 +1593,9 @@ class CommanderCrew(QObject):
         self._user_input: str = ""
 
         # ProxyAgent — 供 main.py 连接 typing 信号
-        self.cko = ProxyAgent("CKO", self)
+        # ProxyAgent — 供 main.py 连接 typing 信号
+        self.ke = ProxyAgent("KE", self)
+        self.qa = ProxyAgent("QA", self)
         self.pm = ProxyAgent("PM", self)
         self.arch = ProxyAgent("Arch", self)
         self.designer = ProxyAgent("Designer", self)
@@ -1490,7 +1604,7 @@ class CommanderCrew(QObject):
 
         # 角色 → ProxyAgent 映射
         self._proxy_map = {
-            "CKO": self.cko, "PM": self.pm, "Arch": self.arch,
+            "KE": self.ke, "QA": self.qa, "PM": self.pm, "Arch": self.arch,
             "Designer": self.designer, "Coder": self.coder,
             "Tester": self.tester,
         }
@@ -1504,7 +1618,7 @@ class CommanderCrew(QObject):
     # ==================================================================
 
     def start_mission(self, user_input: str):
-        """Phase 1: CKO Grounding.
+        """Phase 1: KE Grounding.
 
         由 Bridge 面板的 message_sent 信号触发。
         """
@@ -1613,7 +1727,7 @@ class CommanderCrew(QObject):
             # Grounding 完成 → 等待确认
             self.state_ctrl.transition("AWAITING_CONFIRM")
             self.agent_response.emit("系统",
-                                     "📋 CKO 需求分析完成，请确认项目进入辩论阶段。")
+                                     "📋 KE 需求分析完成，请确认项目进入辩论阶段。")
         elif current == AppState.DEBATE:
             # 辩论完成 → 生产
             self.agent_response.emit("系统",

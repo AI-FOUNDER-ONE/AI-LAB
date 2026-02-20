@@ -32,7 +32,7 @@ class StateController(QObject):
         AppState.GROUNDING:    [AppState.DEBATE, AppState.IDLE],
         AppState.DEBATE:       [AppState.PRODUCTION, AppState.GROUNDING, AppState.IDLE],
         AppState.PRODUCTION:   [AppState.VERIFICATION, AppState.DEBATE, AppState.IDLE],
-        AppState.VERIFICATION: [AppState.DELIVERY, AppState.PRODUCTION, AppState.DEBATE, AppState.IDLE],  # 支持 VERIFICATION→DEBATE 闭环回退
+        AppState.VERIFICATION: [AppState.DELIVERY, AppState.PRODUCTION, AppState.DEBATE, AppState.COMPLETED, AppState.IDLE],  # 支持 VERIFICATION→DEBATE 闭环回退
         AppState.DELIVERY:     [AppState.COMPLETED, AppState.VERIFICATION, AppState.IDLE], # New State
         AppState.COMPLETED:    [AppState.IDLE],
     }

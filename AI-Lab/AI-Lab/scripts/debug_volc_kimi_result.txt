@@ -1,5 +1,0 @@
-﻿Testing Payload (No Tools): {"model": "kimi-k2-thinking-251104", "stream": false, "messages": [{"role": "user", "content": "Hello Kimi"}]}
-
-POST https://ark.cn-beijing.volces.com/api/v3/chat/completions
-Status: 200
-Response: {"choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"Hello! Yes, I'm Kimi. How can I help you today?","reasoning_content":"The user greeted me with \"Hello Kimi\". This is a simple, friendly greeting. I should respond in a warm, helpful manner that acknowledges my identity as Kimi while being conversational and inviting.\n\nKey points to address:\n1. Acknowledge the greeting\n2. Confirm my identity as Kimi\n3. Be helpful and welcoming\n4. Keep it concise but friend

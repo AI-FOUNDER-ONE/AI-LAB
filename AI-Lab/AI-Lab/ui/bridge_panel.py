@@ -1,7 +1,7 @@
 """
-bridge_panel.py - CKO 深度沟通区 (The Bridge)
+bridge_panel.py - KE 深度沟通区 (The Bridge)
 ================================================
-左侧面板：用户与 CKO (Gemini) 的需求打磨对话区。
+左侧面板：用户与 KE (Gemini) 的需求打磨对话区。
 包含对话流显示、输入框、发送按钮和"确认立项"按钮。
 """
 
@@ -20,7 +20,7 @@ from config import AGENT_PROFILES
 
 
 class BridgePanel(QFrame):
-    """CKO 深度沟通区面板
+    """KE 深度沟通区面板
 
     信号:
         message_sent: 用户发送消息时触发, 携带消息文本
@@ -39,6 +39,8 @@ class BridgePanel(QFrame):
 
     def _init_ui(self):
         """Standard GitHub Style UI"""
+        # Ensure Qt is accessible in this scope
+        from PyQt6.QtCore import Qt
         self.setObjectName("panel")
         self.setStyleSheet(get_panel_style())
         
@@ -83,7 +85,7 @@ class BridgePanel(QFrame):
         input_layout.setSpacing(8)
         
         self.input_box = QTextEdit()
-        self.input_box.setPlaceholderText("Brief the CKO...")
+        self.input_box.setPlaceholderText("Brief the KE...")
         self.input_box.setStyleSheet("background: transparent; border: none; color: #C9D1D9;")
         input_layout.addWidget(self.input_box)
         
@@ -112,7 +114,6 @@ class BridgePanel(QFrame):
         # [FIX] 防止长文件名撧开面板宽度
         self.status_label.setWordWrap(False)
         self.status_label.setMaximumWidth(400)
-        from PyQt6.QtCore import Qt
         self.status_label.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         layout.addWidget(self.status_label)
         
@@ -255,8 +256,8 @@ class BridgePanel(QFrame):
         if is_user:
             profile = {"name": "User", "color": color, "icon": "👤"}
         else:
-            # 尝试从配置获取，默认 CKO
-            profile = AGENT_PROFILES.get("CKO", {"name": "CKO", "color": color, "icon": "🧠"})
+            # 尝试从配置获取，默认 KE
+            profile = AGENT_PROFILES.get("KE", {"name": "KE", "color": color, "icon": "🧠"})
             
         # 创建可折叠消息卡片
         msg_widget = CollapsibleMessage(role, content, profile)
@@ -275,18 +276,18 @@ class BridgePanel(QFrame):
         self.message_layout.insertWidget(insert_pos, event_widget)
         self._scroll_to_bottom()
 
-    def append_cko_response(self, content: str):
-        """追加 CKO 回复到对话流（外部调用接口）"""
-        self._append_message("🧠 CKO", content, COLORS.get('accent_blue', '#58A6FF'))
+    def append_ke_response(self, content: str):
+        """追加 KE 回复到对话流（外部调用接口）"""
+        self._append_message("🧠 KE", content, COLORS.get('accent_blue', '#58A6FF'))
 
     def set_status(self, text: str):
         """更新状态栏文字"""
         self.status_label.setText(text)
 
-    def set_cko_typing(self, is_typing: bool):
-        """设置 CKO 正在输入状态"""
+    def set_ke_typing(self, is_typing: bool):
+        """设置 KE 正在输入状态"""
         if is_typing:
-            self.set_status("🧠 CKO 正在思考...")
+            self.set_status("🧠 KE 正在思考...")
             self.btn_send.setEnabled(False)
         else:
             self.set_status("💡 状态：等待输入需求...")

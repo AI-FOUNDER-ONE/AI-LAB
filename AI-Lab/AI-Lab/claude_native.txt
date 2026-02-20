@@ -1,3 +1,0 @@
-https://yunyi.rdzhvip.com/claude/v1/messages: 200 - {"id":"msg_20260216131838","model":"claude-opus-4-20250602","role":"assistant","stop_reason":"end_turn","stop_sequence":
-https://yunyi.rdzhvip.com/v1/messages: 404 - Cannot POST /v1/messages
-https://yunyi.rdzhvip.com/claude/messages: 404 - Cannot POST /claude/messages

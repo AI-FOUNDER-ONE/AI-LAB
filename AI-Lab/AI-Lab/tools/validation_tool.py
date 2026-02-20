@@ -15,6 +15,10 @@ import re
 from typing import Type, List, Dict
 from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
+import subprocess
+import sys
+import os
+from typing import Optional
 
 
 class ValidationInput(BaseModel):
@@ -227,3 +231,61 @@ class ValidationTool(BaseTool):
         report_lines.insert(0, f"## 验证结论: {verdict}")
 
         return "\n".join(report_lines)
+
+
+class PytestInput(BaseModel):
+    """Pytest 运行工具输入参数。"""
+    test_file: str = Field(..., description="要运行的测试文件路径 (绝对路径或相对路径)")
+    
+class PytestRunnerTool(BaseTool):
+    """运行 Pytest 测试套件的工具。"""
+    name: str = "pytest_runner"
+    description: str = "运行指定文件的单元测试 (pytest)。返回测试结果输出。"
+    args_schema: Type[BaseModel] = PytestInput
+
+    def _run(self, test_file: str) -> str:
+        if not os.path.exists(test_file):
+            return f"❌ 错误: 测试文件不存在: {test_file}"
+            
+        try:
+            # Run pytest in a subprocess
+            cmd = [sys.executable, "-m", "pytest", test_file]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, encoding='utf-8')
+            
+            output = result.stdout + "\n" + result.stderr
+            if result.returncode == 0:
+                return f"✅ 测试通过:\n{output}"
+            else:
+                return f"❌ 测试失败 (Exit Code {result.returncode}):\n{output}"
+        except Exception as e:
+            return f"❌ 执行出错: {str(e)}"
+
+class MypyInput(BaseModel):
+    """Mypy 类型检查输入参数。"""
+    file_path: str = Field(..., description="要检查的 Python 文件路径")
+
+class TypeCheckTool(BaseTool):
+    """运行 Mypy 静态类型检查的工具。"""
+    name: str = "mypy_checker"
+    description: str = "对指定文件运行 mypy 进行静态类型检查。"
+    args_schema: Type[BaseModel] = MypyInput
+
+    def _run(self, file_path: str) -> str:
+        if not os.path.exists(file_path):
+            return f"❌ 错误: 文件不存在: {file_path}"
+            
+        try:
+            cmd = [sys.executable, "-m", "mypy", file_path, "--ignore-missing-imports"]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, encoding='utf-8')
+            
+            output = result.stdout + "\n" + result.stderr
+            if result.returncode == 0:
+                if "Success" in output or "no issues found" in output:
+                    return f"✅ 类型检查通过:\n{output}"
+                else:
+                    # Mypy sometimes returns 0 even with output? usually not, but safety check
+                    return f"✅ 类型检查完成:\n{output}"
+            else:
+                 return f"❌ 类型检查失败:\n{output}"
+        except Exception as e:
+            return f"❌ 执行出错: {str(e)}"

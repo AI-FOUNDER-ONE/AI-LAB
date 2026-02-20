@@ -1,9 +1,0 @@
-﻿Testing Payload: {"model": "kimi-k2-thinking-251104", "stream": false, "messages": [{"role": "user", "content": "浠婂ぉ鏈変粈涔堢儹鐐规柊闂?}], "tools": [{"type": "web_search", "max_keyword": 3}]}
-
-[Test 1] POST https://ark.cn-beijing.volces.com/api/v3/chat/completions
-Status: 400
-Response: {"error":{"code":"MissingParameter","message":"The request failed because it is missing `tools.function` parameter. Request id: 021771227453811fc7f2e2801525835f1d88040ce37a813139662","param":"tools.function","type":"BadRequest"}}
-
-[Test 2] POST https://ark.cn-beijing.volces.com/api/v3/responses
-Status: 404
-Response: {"error":{"code":"ToolNotOpen","message":"Your account has not activated web search. You may activate it at https://console.volcengine.com/common-buy/CC_content_plugin Request id: 021771227454147641eeff61d3ee2fcea48be1db3eef9077f5096","param":"","type":"NotFound"}}

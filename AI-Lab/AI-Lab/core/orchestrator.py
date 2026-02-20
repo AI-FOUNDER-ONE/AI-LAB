@@ -33,6 +33,7 @@ from core.state_controller import StateController
 from core.chat_history import ChatHistoryManager
 from core.session_store import SessionStore
 from config import AppState, MAX_DEBATE_ROUNDS
+from core.logger import logger
 
 
 class AgentWorker(QThread):
@@ -65,12 +66,22 @@ class AgentWorker(QThread):
     def run(self):
         """执行 Agent API 调用（在后台线程中运行）"""
         try:
-            if self._is_cancelled:
+            if self._is_cancelled or self.isInterruptionRequested():
+                logger.debug(f"AgentWorker for {self._agent.role} cancelled before execution")
                 return
+
             response = self._agent.send_message(self._message)
-            if not self._is_cancelled:
-                self.finished_with_result.emit(self._agent.role, response)
+
+            if self._is_cancelled or self.isInterruptionRequested():
+                logger.debug(f"AgentWorker for {self._agent.role} cancelled after execution, dropping result")
+                return
+
+            self.finished_with_result.emit(self._agent.role, response)
+
         except Exception as e:
+            if self._is_cancelled or self.isInterruptionRequested():
+                logger.debug(f"AgentWorker for {self._agent.role} cancelled during exception")
+                return
             error_msg = f"Agent [{self._agent.role}] 执行失败: {str(e)}\n{traceback.format_exc()}"
             self.error_occurred.emit(self._agent.role, error_msg)
 
@@ -78,13 +89,15 @@ class AgentWorker(QThread):
         """取消当前工作"""
         self._is_cancelled = True
         self._agent.stop()
+        self.requestInterruption()  # 请求线程中断
+        self.quit()  # 请求线程退出
 
 
 class AuditWorker(QThread):
     """审计工作线程 (CKO Vision Keeper)"""
     
     audit_finished = pyqtSignal(str)   # 审计结果 (PASS / FAIL: xxx)
-    error_occurred = pyqtSignal(str)   # 错误消息
+    error_occurred = pyqtSignal(str, str)   # (角色, 错误消息)
 
     def __init__(self, cko_agent, stage, context, mission_protocol, parent=None):
         super().__init__(parent)
@@ -92,18 +105,33 @@ class AuditWorker(QThread):
         self.stage = stage
         self.context = context
         self.protocol = mission_protocol
+        self._is_cancelled = False
 
     def run(self):
         try:
+            if self._is_cancelled or self.isInterruptionRequested():
+                logger.debug("AuditWorker cancelled before audit")
+                return
+
             result = self.cko.audit_node(self.stage, self.context, self.protocol)
+
+            if self._is_cancelled or self.isInterruptionRequested():
+                logger.debug("AuditWorker cancelled after audit, dropping result")
+                return
+
             self.audit_finished.emit(result)
+
         except Exception as e:
-            self.error_occurred.emit(f"CKO 审计异常: {str(e)}")
+            if self._is_cancelled or self.isInterruptionRequested():
+                logger.debug("AuditWorker cancelled during exception")
+                return
+            self.error_occurred.emit("CKO", f"CKO 审计异常: {str(e)}")
 
     def cancel(self):
         """取消审计"""
-        # 审计通常是同步调用，无法立即中断，但可标记停止
-        pass
+        self._is_cancelled = True
+        self.requestInterruption()  # 请求线程中断
+        self.quit()  # 请求线程退出
 
 
 class Orchestrator(QObject):
@@ -303,7 +331,7 @@ class Orchestrator(QObject):
 
     def _run_moderator_loop(self):
         """进入/继续 PM 主持的博弈循环"""
-        print(f"DEBUG: _run_moderator_loop entered. State={self.state_ctrl.current_state}, Round={self._debate_round}")
+        logger.debug(f"_run_moderator_loop entered. State={self.state_ctrl.current_state}, Round={self._debate_round}")
         # 1. 状态检查：如果已停止 (IDLE)，则不再执行
         if self.state_ctrl.current_state == AppState.IDLE:
             return
@@ -414,9 +442,9 @@ class Orchestrator(QObject):
 
     def _call_agent(self, agent):
         """调用指定 Agent 发言"""
-        print(f"DEBUG: Orchestrator._call_agent called for {agent.role}")
+        logger.debug(f"Orchestrator._call_agent called for {agent.role}")
         if self.state_ctrl.current_state == AppState.IDLE:
-             print("DEBUG: Orchestrator state is IDLE, aborting call")
+             logger.debug("Orchestrator state is IDLE, aborting call")
              return
 
         # 构建 prompt：包含最近的上下文
@@ -427,7 +455,7 @@ class Orchestrator(QObject):
             f"请输出你的观点或方案。"
         )
         
-        print(f"DEBUG: Starting AgentWorker for {agent.role}")
+        logger.debug(f"Starting AgentWorker for {agent.role}")
         worker = AgentWorker(agent, msg, self)
         # 统一使用通用回调，因为处理逻辑一样：记录 -> 回到 Moderator
         worker.finished_with_result.connect(self._on_debate_agent_response)
@@ -436,16 +464,16 @@ class Orchestrator(QObject):
 
     def _on_debate_agent_response(self, role: str, content: str):
         """Arch/Designer 发言完毕 -> 记录并交回主持棒"""
-        print(f"DEBUG: Orchestrator received response from {role}")
+        logger.debug(f"Orchestrator received response from {role}")
         if self.state_ctrl.current_state == AppState.IDLE:
-             print("DEBUG: State is IDLE, ignoring response")
+             logger.debug("State is IDLE, ignoring response")
              return
 
         self.agent_response.emit(role, content)
         self.session_store.append_meeting_log(role, content)
         
         # 话筒交回给 PM
-        print("DEBUG: Passing control back to Moderator loop")
+        logger.debug("Passing control back to Moderator loop")
         self._run_moderator_loop()
 
     def _get_recent_debate_history(self, limit=5) -> str:
@@ -509,8 +537,6 @@ class Orchestrator(QObject):
             f"## 完整会议记录 (Context):\n{full_debate_history}\n\n"
             f"## 架构方案（Architect）:\n{arch_content}\n\n"
             f"## 详细设计（Designer）:\n{designer_content}\n\n"
-            f"## 架构方案（Architect）:\n{arch_content}\n\n"
-            f"## 详细设计（Designer）:\n{designer_content}\n\n"
             f"请根据任务类型（软件/非软件）智能判断输出形式：\n"
             f"1. 软件任务：输出完整、可运行的 Python 代码。\n"
             f"2. 非软件任务：输出详细的《项目执行计划书》和步骤清单。"
@@ -522,27 +548,13 @@ class Orchestrator(QObject):
         self._start_worker(worker)
 
     def _on_coder_response(self, role: str, content: str):
-        """Coder 完成编码 → 进入 VERIFICATION 阶段
-        
-        Refactored:
-        1. 完整回复 -> War Room (SSOT)
-        2. 代码块 -> Execution Panel (Terminal)
-        """
+        """Coder 完成编码 → 进入 VERIFICATION 阶段"""
         try:
-            # 1. 路由消息到 War Room
-            self.main_window.warroom_panel.append_message(role, content, self.state_ctrl.current_state)
+            # 1. 发射信号更新 UI (War Room & Execution Panel 由 main.py 处理)
+            self.agent_response.emit(role, content)
             self.session_store.append_meeting_log(role, content)
 
-            # 2. 提取并部署代码到 Execution Lab
-            import re
-            code_match = re.search(r"```python(.*?)```", content, re.DOTALL)
-            if code_match:
-                code = code_match.group(1).strip()
-                self.main_window.execution_panel.set_code(code)
-                self.main_window.execution_panel.append_log(f"[{role}] Code extracted and deployed to runtime environment.")
-            else:
-                self.main_window.execution_panel.append_log(f"[{role}] Message received (No code block detected).")
-
+            # 2. 更新 Session
             self.session_store.update_session(final_code=content)
 
             # 启动测试验证
@@ -580,23 +592,11 @@ class Orchestrator(QObject):
         self._start_worker(worker)
 
     def _on_tester_response(self, role: str, content: str):
-        """Validator 评估完毕 → 提交 CKO 审计
-        
-        Refactored:
-        1. 完整报告 -> War Room (SSOT)
-        2. 验证结果摘要 -> Execution Panel (Log)
-        """
+        """Validator 评估完毕 → 提交 CKO 审计"""
         try:
-            # 1. 路由消息到 War Room
-            self.main_window.warroom_panel.append_message(role, content, self.state_ctrl.current_state)
+            # 1. 发射信号更新 UI
+            self.agent_response.emit(role, content)
             self.session_store.append_meeting_log(role, content)
-            
-            # 2. 记录到 Execution Log
-            if "PASS" in content:
-                self.main_window.execution_panel.append_log(f"[{role}] VERIFICATION PASSED. Submitting for Audit.")
-            else:
-                 self.main_window.execution_panel.append_log(f"[{role}] ISSUES DETECTED. See War Room for details.")
-
             self.session_store.append_test_report({
                 "role": role,
                 "result": content,
@@ -759,7 +759,7 @@ class Orchestrator(QObject):
         1. Always display user message in chat stream (via signal).
         2. Auto-identify target role if not explicitly @-mentioned.
         """
-        print(f"[DEBUG] Orchestrator received user message: {message}") # DEBUG
+        logger.debug(f"Orchestrator received user message: {message}")
         
         # 1. 在 UI 上显示（角色: Commander）
         # This triggers WarRoomPanel.append_message => shows user bubble
@@ -878,16 +878,40 @@ class Orchestrator(QObject):
 
     def stop_all(self):
         """中止所有活跃的 Worker 线程"""
+        if not self._active_workers:
+            return
+
+        logger.info(f"Stopping {len(self._active_workers)} active workers...")
+
+        # 第一阶段：请求所有线程退出
         for worker in self._active_workers:
             worker.cancel()
             worker.quit()
-            worker.wait(3000)  # 最多等 3 秒
+
+        # 第二阶段：等待线程结束（分批等待）
+        still_running = []
+        for worker in self._active_workers:
+            if worker.isRunning():
+                if worker.wait(2000):  # 等待2秒
+                    logger.debug(f"Worker {worker._agent.role if hasattr(worker, '_agent') else 'unknown'} stopped gracefully")
+                else:
+                    logger.warning(f"Worker {worker._agent.role if hasattr(worker, '_agent') else 'unknown'} still running after 2s")
+                    still_running.append(worker)
+
+        # 第三阶段：强制终止仍然运行的线程（最后手段）
+        if still_running:
+            logger.warning(f"Force terminating {len(still_running)} workers...")
+            for worker in still_running:
+                if worker.isRunning():
+                    worker.terminate()
+                    worker.wait(1000)
 
         self._active_workers.clear()
         self.state_ctrl.reset()
         self.agent_response.emit(
             "系统", "🛑 所有任务已中止。"
         )
+        logger.info("All workers stopped")
 
     def new_session(self):
         """开始新会话，重置所有状态"""

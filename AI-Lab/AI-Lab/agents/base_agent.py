@@ -47,6 +47,7 @@ class BaseAgent(QObject):
         self.system_prompt = system_prompt
         self._messages = []
         self._is_active = False
+        self.max_history_length = 50  # 限制消息历史长度，防止内存增长
 
         # 初始化消息历史
         if system_prompt:
@@ -61,6 +62,22 @@ class BaseAgent(QObject):
             self._messages[0]["content"] = new_prompt
         else:
             self._messages.insert(0, {"role": "system", "content": new_prompt})
+
+    def _trim_message_history(self):
+        """修剪消息历史，保留系统提示和最近的对话"""
+        if len(self._messages) <= self.max_history_length:
+            return
+
+        # 始终保留系统提示（如果有）
+        system_messages = [msg for msg in self._messages if msg["role"] == "system"]
+        other_messages = [msg for msg in self._messages if msg["role"] != "system"]
+
+        # 保留最新的消息
+        keep_count = self.max_history_length - len(system_messages)
+        if keep_count > 0 and len(other_messages) > keep_count:
+            other_messages = other_messages[-keep_count:]
+
+        self._messages = system_messages + other_messages
 
     def set_domain_persona(self, task_type: str):
         """Dynamic Persona Injection based on Task Type"""
