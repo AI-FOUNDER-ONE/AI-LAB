@@ -449,6 +449,10 @@ class WarRoomPanel(QFrame):
         self.setObjectName("panel")
         self.setStyleSheet(get_panel_style())
         self._current_state = "ALL"  # 当前过滤状态
+        # 流式消息跟踪
+        self._streaming_messages = {}  # role -> message widget
+        self._streaming_buffers = {}   # role -> buffer content
+        self._typing_timers = {}       # role -> typing timer
         self._init_ui()
 
     def _init_ui(self):
@@ -584,6 +588,11 @@ class WarRoomPanel(QFrame):
             content: 消息内容
             state_id: 消息所属的状态 ID (用于时间轴过滤)
         """
+        # 如果该角色有正在进行的流式消息，先结束它
+        if role in self._streaming_messages:
+            self.finalize_streaming_message(role, content)
+            return
+
         # 首次收到消息时隐藏占位提示
         if self.placeholder.isVisible():
             self.placeholder.setVisible(False)
@@ -594,7 +603,7 @@ class WarRoomPanel(QFrame):
 
         # 创建可折叠消息卡片
         msg_widget = CollapsibleMessage(role, content, profile)
-        
+
         # 绑定状态标签
         msg_widget.setProperty("state_id", state_id)
 
@@ -686,10 +695,147 @@ class WarRoomPanel(QFrame):
             if widget and widget != self.placeholder:
                 widget.deleteLater()
 
+        # 清除流式消息跟踪
+        self._streaming_messages.clear()
+        self._streaming_buffers.clear()
+        for timer in self._typing_timers.values():
+            if timer and timer.isActive():
+                timer.stop()
+        self._typing_timers.clear()
+
         # 重新显示占位提示
         self.placeholder.setVisible(True)
         if self.placeholder.parent() is None:
             self.message_layout.insertWidget(0, self.placeholder)
+
+    def append_stream_chunk(self, role: str, chunk: str):
+        """追加流式输出片段到指定角色的消息
+
+        Args:
+            role: 角色标识
+            chunk: 流式片段内容
+        """
+        # 首次收到消息时隐藏占位提示
+        if self.placeholder.isVisible():
+            self.placeholder.setVisible(False)
+
+        # 初始化角色的缓冲区
+        if role not in self._streaming_buffers:
+            self._streaming_buffers[role] = ""
+
+        # 追加新片段到缓冲区
+        self._streaming_buffers[role] += chunk
+
+        # 检查是否已有该角色的流式消息部件
+        if role not in self._streaming_messages:
+            # 创建新的流式消息部件
+            profile = AGENT_PROFILES.get(role, {
+                "name": role, "color": COLORS['text_secondary'], "icon": "🤖"
+            })
+
+            # 创建初始消息，显示为"正在输入..."
+            initial_content = f"{chunk}█"  # 添加光标效果
+            msg_widget = CollapsibleMessage(role, initial_content, profile)
+
+            # 标记为流式消息
+            msg_widget.setProperty("is_streaming", True)
+            msg_widget.setProperty("stream_role", role)
+
+            # 添加到布局
+            insert_pos = self.message_layout.count() - 1
+            self.message_layout.insertWidget(insert_pos, msg_widget)
+
+            # 保存引用
+            self._streaming_messages[role] = msg_widget
+
+            # 根据当前过滤状态决定是否显示
+            # 注意：流式消息可能没有 state_id，我们使用 None
+            if self._current_state != "ALL":
+                # 如果当前正在过滤，流式消息可能不可见
+                msg_widget.setVisible(False)
+        else:
+            # 更新现有消息部件的内容
+            msg_widget = self._streaming_messages[role]
+            # 获取消息部件的子控件并更新内容
+            # 这里需要修改 CollapsibleMessage 以支持内容更新
+            # 临时方案：删除旧部件，创建新部件
+            old_widget = msg_widget
+            self.message_layout.removeWidget(old_widget)
+            old_widget.deleteLater()
+
+            # 创建更新后的消息
+            profile = AGENT_PROFILES.get(role, {
+                "name": role, "color": COLORS['text_secondary'], "icon": "🤖"
+            })
+            content_with_cursor = f"{self._streaming_buffers[role]}█"
+            new_widget = CollapsibleMessage(role, content_with_cursor, profile)
+            new_widget.setProperty("is_streaming", True)
+            new_widget.setProperty("stream_role", role)
+
+            # 找到原来的位置插入
+            # 我们需要找到原部件的位置
+            insert_pos = 0
+            for i in range(self.message_layout.count()):
+                item = self.message_layout.itemAt(i)
+                if item and item.widget() == old_widget:
+                    insert_pos = i
+                    break
+
+            self.message_layout.insertWidget(insert_pos, new_widget)
+            self._streaming_messages[role] = new_widget
+
+            # 根据过滤状态设置可见性
+            if self._current_state != "ALL":
+                new_widget.setVisible(False)
+
+        # 滚动到底部
+        self._scroll_to_bottom()
+
+    def finalize_streaming_message(self, role: str, final_content: str = None):
+        """结束指定角色的流式消息，转换为普通消息
+
+        Args:
+            role: 角色标识
+            final_content: 最终完整内容（如果为None则使用缓冲区内容）
+        """
+        if role not in self._streaming_messages:
+            return
+
+        # 获取缓冲区的最终内容
+        if final_content is None:
+            final_content = self._streaming_buffers.get(role, "")
+
+        # 移除光标效果
+        final_content = final_content.replace("█", "")
+
+        # 移除旧的流式消息部件
+        msg_widget = self._streaming_messages.pop(role, None)
+        if msg_widget:
+            self.message_layout.removeWidget(msg_widget)
+            msg_widget.deleteLater()
+
+        # 清除缓冲区
+        if role in self._streaming_buffers:
+            del self._streaming_buffers[role]
+
+        # 创建最终的普通消息
+        if final_content.strip():
+            profile = AGENT_PROFILES.get(role, {
+                "name": role, "color": COLORS['text_secondary'], "icon": "🤖"
+            })
+            final_widget = CollapsibleMessage(role, final_content, profile)
+            final_widget.setProperty("is_streaming", False)
+
+            # 添加到布局末尾（在弹簧之前）
+            insert_pos = self.message_layout.count() - 1
+            self.message_layout.insertWidget(insert_pos, final_widget)
+
+            # 根据过滤状态设置可见性
+            if self._current_state != "ALL":
+                final_widget.setVisible(False)
+
+            # 滚动到底部
+            self._scroll_to_bottom()
 
     def _scroll_to_bottom(self):
         """滚动到底部"""

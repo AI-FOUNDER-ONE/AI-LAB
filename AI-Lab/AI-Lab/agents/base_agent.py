@@ -195,7 +195,7 @@ class BaseAgent(QObject):
         return tools_schema
 
     def _execute_tool_with_timeout(self, tool_def, args, timeout_seconds=30):
-        """带超时控制的工具执行
+        """带超时控制的工具执行（使用 ThreadPoolExecutor 避免孤儿线程）
 
         Args:
             tool_def: 工具定义字典
@@ -209,42 +209,51 @@ class BaseAgent(QObject):
             TimeoutError: 如果工具执行超时
             Exception: 工具执行过程中的其他异常
         """
-        import threading
+        import concurrent.futures
         import queue
+        import threading
 
-        result_queue = queue.Queue()
+        # 创建一个单独的线程池执行器，避免使用全局线程池
+        # 使用 daemon=True 确保线程不会阻止程序退出
+        executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix=f"ToolExecutor-{tool_def.get('name', 'unknown')}"
+        )
+        future = executor.submit(tool_def['callable'], **args)
 
-        def _run_tool():
-            try:
-                result = tool_def['callable'](**args)
-                result_queue.put(result)
-            except Exception as e:
-                result_queue.put(e)
-
-        thread = threading.Thread(target=_run_tool)
-        thread.daemon = True
-        thread.start()
-        thread.join(timeout=timeout_seconds)
-
-        if thread.is_alive():
-            raise TimeoutError(f"Tool execution timed out after {timeout_seconds} seconds")
-
-        if not result_queue.empty():
-            result = result_queue.get()
-            if isinstance(result, Exception):
-                raise result
+        try:
+            # 等待结果，超时后抛出 TimeoutError
+            result = future.result(timeout=timeout_seconds)
             return result
+        except concurrent.futures.TimeoutError:
+            # 取消 future（如果还在运行）
+            future.cancel()
+            # 尝试等待一小段时间让任务响应取消
+            try:
+                # 等待最多 0.5 秒，如果任务还没结束，我们继续执行
+                concurrent.futures.wait([future], timeout=0.5)
+            except:
+                pass
+            raise TimeoutError(f"Tool execution timed out after {timeout_seconds} seconds")
+        except Exception as e:
+            # 其他异常直接抛出
+            raise e
+        finally:
+            # 无论成功与否，都关闭执行器
+            # wait=False 表示不等待线程完成，因为我们希望超时后线程可以继续运行但最终会被回收
+            # 由于线程是 daemon=True（默认），主线程退出时它们会被强制结束
+            executor.shutdown(wait=False)
 
-        raise RuntimeError("Tool execution failed without result or exception")
-
-    def _call_api_with_tools(self, messages: list) -> str:
+    def _call_api_with_tools(self, messages: list) -> dict:
         """带有工具调用循环的 API 调用（默认实现，子类可覆盖）
 
         Args:
             messages: 完整的消息历史列表
 
         Returns:
-            最终回复文本（所有工具调用结果已整合）
+            字典，包含 'content' 和 'tool_calls' 字段。如果没有工具调用，
+            则返回的字典中 'tool_calls' 为空列表。如果有工具调用，执行工具后
+            立即返回，tool_calls 包含工具调用信息（原始调用，不含结果）。
         """
         # 获取工具的JSON Schema（使用缓存）
         tools_schema = self._get_tools_schema()
@@ -268,6 +277,7 @@ class BaseAgent(QObject):
                 tool_calls = response.get('tool_calls', [])
                 if tool_calls:
                     # 执行工具调用并将结果追加到消息历史
+                    executed_tool_calls = []
                     for tool_call in tool_calls:
                         # 支持两种工具调用格式：直接字段或嵌套 function 字段
                         if 'function' in tool_call:
@@ -298,31 +308,50 @@ class BaseAgent(QObject):
                                     "tool_call_id": tool_call.get('id', ''),
                                     "name": func_name
                                 })
+                                # 记录执行成功的工具调用信息
+                                executed_tool_calls.append({
+                                    "name": func_name,
+                                    "args": args,
+                                    "result": str(result)
+                                })
                             except Exception as e:
+                                error_msg = f"Error: {str(e)}"
                                 messages.append({
                                     "role": "tool",
-                                    "content": f"Error: {str(e)}",
+                                    "content": error_msg,
                                     "tool_call_id": tool_call.get('id', ''),
                                     "name": func_name
                                 })
+                                executed_tool_calls.append({
+                                    "name": func_name,
+                                    "args": args,
+                                    "result": error_msg
+                                })
                         else:
+                            error_msg = f"Tool '{func_name}' not found"
                             messages.append({
                                 "role": "tool",
-                                "content": f"Tool '{func_name}' not found",
+                                "content": error_msg,
                                 "tool_call_id": tool_call.get('id', ''),
                                 "name": func_name
                             })
-                    # 继续循环，让模型基于工具结果生成回复
-                    continue
+                            executed_tool_calls.append({
+                                "name": func_name,
+                                "args": args,
+                                "result": error_msg
+                            })
+                    # 执行完所有工具调用后，立即返回，不再继续循环
+                    # 返回原始工具调用列表，调用方可以根据需要处理
+                    return {"content": content, "tool_calls": executed_tool_calls}
                 else:
-                    # 没有工具调用，返回内容
-                    return content
+                    # 没有工具调用，返回字典
+                    return {"content": content, "tool_calls": []}
             else:
                 # 返回字符串，无工具调用
-                return response
+                return {"content": response, "tool_calls": []}
 
         # 达到最大迭代次数
-        return "Tool call loop exceeded maximum iterations."
+        return {"content": "Tool call loop exceeded maximum iterations.", "tool_calls": []}
 
     def send_message(self, content: str) -> str:
         """发送消息并获取回复（同步方法，由 QThread 调用）
@@ -331,7 +360,8 @@ class BaseAgent(QObject):
             content: 用户或系统发送的消息内容
 
         Returns:
-            AI 的回复文本
+            AI 的回复文本。如果存在工具调用，返回以 '__TOOL_RESULT__:' 开头的 JSON 字符串，
+            包含工具调用结果。
         """
         self._is_active = True
         self.typing_started.emit(self.role)
@@ -343,17 +373,46 @@ class BaseAgent(QObject):
         })
 
         try:
-            # 调用带有工具调用支持的 API 方法
-            response = self._call_api_with_tools(self._messages)
+            # 调用带有工具调用支持的 API 方法，返回字典
+            response_dict = self._call_api_with_tools(self._messages)
+            content_text = response_dict.get('content', '')
+            tool_calls = response_dict.get('tool_calls', [])
 
-            # 添加助手回复到历史
-            self._messages.append({
-                "role": "assistant",
-                "content": response,
-            })
+            # 检查是否有工具调用被执行（tool_calls 列表非空）
+            if tool_calls:
+                # 有工具调用，构造一个特殊格式的字符串，包含工具调用信息
+                # 我们将工具调用结果编码为 JSON 字符串，以便调用方解析
+                import json
+                tool_result = {
+                    "content": content_text,
+                    "tool_calls": tool_calls
+                }
+                result_str = "__TOOL_RESULT__:" + json.dumps(tool_result, ensure_ascii=False)
+                # 注意：我们不在消息历史中添加这个特殊字符串，而是添加原始内容
+                if content_text:
+                    self._messages.append({
+                        "role": "assistant",
+                        "content": content_text,
+                    })
+                else:
+                    # 如果没有内容，可能只有工具调用，我们添加一个占位符
+                    self._messages.append({
+                        "role": "assistant",
+                        "content": "[工具调用执行完毕]",
+                    })
+            else:
+                # 没有工具调用，正常处理
+                result_str = content_text
+                self._messages.append({
+                    "role": "assistant",
+                    "content": content_text,
+                })
 
-            self.response_ready.emit(self.role, response)
-            return response
+            # 如果是工具调用结果，不进行流式传输
+            if not result_str.startswith("__TOOL_RESULT__:"):
+                self._emit_stream_chunks(result_str)
+            self.response_ready.emit(self.role, result_str)
+            return result_str
 
         except Exception as e:
             error_msg = f"[{self.role}] API 调用失败: {str(e)}\n{traceback.format_exc()}"
@@ -401,3 +460,32 @@ class BaseAgent(QObject):
     def stop(self):
         """中止当前任务"""
         self._is_active = False
+
+    def _emit_stream_chunks(self, content: str, chunk_size: int = 50):
+        """将内容分割成块并发射流式信号
+
+        Args:
+            content: 要流式传输的内容
+            chunk_size: 每个块的大致字符数（按单词边界分割）
+        """
+        if not content:
+            return
+
+        # 按单词分割，保持单词完整性
+        words = content.split(' ')
+        chunk = []
+        current_length = 0
+
+        for word in words:
+            chunk.append(word)
+            current_length += len(word) + 1  # +1 for space
+            if current_length >= chunk_size:
+                chunk_text = ' '.join(chunk)
+                self.stream_chunk.emit(self.role, chunk_text)
+                chunk = []
+                current_length = 0
+
+        # 发射剩余部分
+        if chunk:
+            chunk_text = ' '.join(chunk)
+            self.stream_chunk.emit(self.role, chunk_text)

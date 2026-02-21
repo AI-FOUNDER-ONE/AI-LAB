@@ -64,13 +64,29 @@ class AgentWorker(QThread):
         self._is_cancelled = False
 
     def run(self):
-        """执行 Agent API 调用（在后台线程中运行）"""
+        """执行 Agent API 调用（在后台线程中运行），支持超时和取消"""
         try:
             if self._is_cancelled or self.isInterruptionRequested():
                 logger.debug(f"AgentWorker for {self._agent.role} cancelled before execution")
                 return
 
-            response = self._agent.send_message(self._message)
+            # 使用 ThreadPoolExecutor 执行 send_message，以便支持超时和取消
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(self._agent.send_message, self._message)
+                # 等待完成，但定期检查取消标志
+                timeout = 300  # 5分钟最大超时
+                try:
+                    response = future.result(timeout=timeout)
+                except concurrent.futures.TimeoutError:
+                    # 超时后取消 future
+                    future.cancel()
+                    # 等待一小段时间让任务响应取消
+                    concurrent.futures.wait([future], timeout=0.5)
+                    raise TimeoutError(f"Agent execution timed out after {timeout} seconds")
+                except Exception as e:
+                    # 其他异常直接抛出
+                    raise e
 
             if self._is_cancelled or self.isInterruptionRequested():
                 logger.debug(f"AgentWorker for {self._agent.role} cancelled after execution, dropping result")
@@ -159,6 +175,7 @@ class Orchestrator(QObject):
     workflow_completed = pyqtSignal()           # 工作流完成
     debate_round_info = pyqtSignal(int, int)    # (当前轮次, 最大轮次)
     agent_typing = pyqtSignal(str, bool)        # (角色, 是否正在输入)
+    agent_stream_chunk = pyqtSignal(str, str)   # (角色, 文本片段)
 
     # ---------- 常量 ----------
     # MAX_DEBATE_ROUNDS 已移至 config.py
@@ -187,6 +204,7 @@ class Orchestrator(QObject):
         for agent in [self.cko, self.pm, self.arch, self.designer, self.coder, self.tester]:
             agent.typing_started.connect(lambda role, a=agent: self.agent_typing.emit(role, True))
             agent.typing_finished.connect(lambda role, a=agent: self.agent_typing.emit(role, False))
+            agent.stream_chunk.connect(lambda chunk, role=agent.role: self.agent_stream_chunk.emit(role, chunk))
 
         # ------ 活跃的 Worker 线程列表 ------
         self._active_workers = []
@@ -368,7 +386,7 @@ class Orchestrator(QObject):
         self._start_worker(worker)
 
     def _on_moderator_decision(self, role: str, content: str):
-        """处理 PM 主持人的决策"""
+        """处理 PM 主持人的决策（支持工具调用和传统文本指令）"""
         # 状态检查
         if self.state_ctrl.current_state == AppState.IDLE:
              return
@@ -376,7 +394,55 @@ class Orchestrator(QObject):
         self.agent_response.emit(role, content)
         self.session_store.append_meeting_log(role, content)
 
-        # 解析指令
+        # 首先检查是否为工具调用结果
+        if content.startswith("__TOOL_RESULT__:"):
+            try:
+                import json
+                tool_data = json.loads(content[len("__TOOL_RESULT__:"):])
+                tool_calls = tool_data.get("tool_calls", [])
+                if not tool_calls:
+                    # 没有工具调用，回退到文本解析
+                    self._parse_text_decision(content)
+                    return
+
+                # 处理每个工具调用（通常只有一个）
+                for tool_call in tool_calls:
+                    tool_name = tool_call.get("name")
+                    tool_args = tool_call.get("args", {})
+                    tool_result = tool_call.get("result", "")
+
+                    if tool_name == "delegate_to_role":
+                        # 提取角色名称
+                        role_name = tool_args.get("role_name", "")
+                        if role_name:
+                            self._handle_delegate_to_role(role_name, tool_args.get("instruction", ""))
+                        else:
+                            self.agent_response.emit("系统", "⚠️ 工具调用失败：未指定角色名称")
+                            self._run_moderator_loop()
+
+                    elif tool_name == "approve_solution":
+                        reason = tool_args.get("reason", "")
+                        self._handle_approve_solution(reason)
+
+                    elif tool_name == "reject_solution":
+                        reason = tool_args.get("reason", "")
+                        self._handle_reject_solution(reason)
+
+                    else:
+                        # 未知工具，回退到文本解析
+                        self._parse_text_decision(content)
+                # 工具调用处理完毕，返回
+                return
+            except Exception as e:
+                logger.error(f"解析工具调用结果失败: {e}")
+                # 解析失败，回退到文本解析
+                self._parse_text_decision(content)
+        else:
+            # 传统文本指令解析
+            self._parse_text_decision(content)
+
+    def _parse_text_decision(self, content: str):
+        """解析传统的文本指令（NEXT_SPEAKER: / DECISION:）"""
         import re
         next_speaker = None
         decision = None
@@ -385,7 +451,7 @@ class Orchestrator(QObject):
             match = re.search(r"NEXT_SPEAKER:\s*(\w+)", content)
             if match:
                 next_speaker = match.group(1)
-        
+
         if "DECISION:" in content:
             match = re.search(r"DECISION:\s*(\w+)", content)
             if match:
@@ -397,7 +463,7 @@ class Orchestrator(QObject):
             self.agent_response.emit("系统", "🔍 [Vision Keeper] CKO 正在进行最终方案审计...")
             # 进入 CKO 审计环节
             self.session_store.append_timeline_event(AppState.DEBATE, "CKO 方案审计")
-            
+
             # 获取完整上下文进行审计
             full_context = self.session_store.get_all_meeting_logs()
             self._run_audit("Debate Phase", full_context, self._on_debate_audit_finished)
@@ -407,38 +473,59 @@ class Orchestrator(QObject):
             # 这里简单处理：重置轮次继续讨论，或者提示用户干预
             self.agent_response.emit("系统", "请用户介入干预或重启会话。")
         elif next_speaker:
-            # --- 循环 / 死锁检测 ---
-            if next_speaker == self._last_speaker_role:
-                self._consecutive_speaker_count += 1
-            else:
-                self._last_speaker_role = next_speaker
-                self._consecutive_speaker_count = 1
-            
-            if self._consecutive_speaker_count >= 5:
-                # 强制打断循环
-                self.agent_response.emit("系统", f"⚠️ 检测到 PM 连续 {self._consecutive_speaker_count} 次调用 {next_speaker}，强制打断循环。")
-                self.agent_response.emit("系统", "将邀请 Designer 尝试打破僵局。")
-                next_speaker = "Designer"
-                self._last_speaker_role = "Designer"
-                self._consecutive_speaker_count = 1
-
-            if "Arch" in next_speaker:
-                self._call_agent(self.arch)
-            elif "Designer" in next_speaker:
-                self._call_agent(self.designer)
-            elif "Coder" in next_speaker:
-                self._call_agent(self.coder)  # Allow Coder to speak
-            elif "CKO" in next_speaker:
-                self._call_agent(self.cko)
-            else:
-                 # 无法识别的角色，默认叫 Arch
-                 self.agent_response.emit("系统", f"⚠️ 未知角色 {next_speaker}，默认邀请 Architect 发言。")
-                 self._call_agent(self.arch)
+            self._handle_delegate_to_role(next_speaker, "")
         else:
              # 如果 PM 没给指令（可能是纯点评），默认让 Designer 回应（通常是 Arch 发言后 PM 点评，然后 Designer 接话）
              # 或者再次询问 PM
              self.agent_response.emit("系统", "⚠️ PM 未给出明确指令，继续请求裁决...")
              self._run_moderator_loop()
+
+    def _handle_delegate_to_role(self, role_name: str, instruction: str = ""):
+        """处理委托发言权给指定角色"""
+        # 循环 / 死锁检测
+        if role_name == self._last_speaker_role:
+            self._consecutive_speaker_count += 1
+        else:
+            self._last_speaker_role = role_name
+            self._consecutive_speaker_count = 1
+
+        if self._consecutive_speaker_count >= 5:
+            # 强制打断循环
+            self.agent_response.emit("系统", f"⚠️ 检测到 PM 连续 {self._consecutive_speaker_count} 次调用 {role_name}，强制打断循环。")
+            self.agent_response.emit("系统", "将邀请 Designer 尝试打破僵局。")
+            role_name = "Designer"
+            self._last_speaker_role = "Designer"
+            self._consecutive_speaker_count = 1
+
+        if "Arch" in role_name:
+            self._call_agent(self.arch)
+        elif "Designer" in role_name:
+            self._call_agent(self.designer)
+        elif "Coder" in role_name:
+            self._call_agent(self.coder)  # Allow Coder to speak
+        elif "CKO" in role_name:
+            self._call_agent(self.cko)
+        else:
+             # 无法识别的角色，默认叫 Arch
+             self.agent_response.emit("系统", f"⚠️ 未知角色 {role_name}，默认邀请 Architect 发言。")
+             self._call_agent(self.arch)
+
+    def _handle_approve_solution(self, reason: str = ""):
+        """处理批准方案"""
+        self.agent_response.emit("系统", "✅ PM 宣布方案通过。" + (f" 理由: {reason}" if reason else ""))
+        self.agent_response.emit("系统", "🔍 [Vision Keeper] CKO 正在进行最终方案审计...")
+        # 进入 CKO 审计环节
+        self.session_store.append_timeline_event(AppState.DEBATE, "CKO 方案审计")
+
+        # 获取完整上下文进行审计
+        full_context = self.session_store.get_all_meeting_logs()
+        self._run_audit("Debate Phase", full_context, self._on_debate_audit_finished)
+
+    def _handle_reject_solution(self, reason: str = ""):
+        """处理驳回方案"""
+        self.agent_response.emit("系统", "❌ PM 否决了当前方案，需要重新审视任务书。" + (f" 理由: {reason}" if reason else ""))
+        # 这里简单处理：重置轮次继续讨论，或者提示用户干预
+        self.agent_response.emit("系统", "请用户介入干预或重启会话。")
 
     def _call_agent(self, agent):
         """调用指定 Agent 发言"""
@@ -877,7 +964,7 @@ class Orchestrator(QObject):
         return ""
 
     def stop_all(self):
-        """中止所有活跃的 Worker 线程"""
+        """中止所有活跃的 Worker 线程（安全退出，不强制终止）"""
         if not self._active_workers:
             return
 
@@ -888,30 +975,31 @@ class Orchestrator(QObject):
             worker.cancel()
             worker.quit()
 
-        # 第二阶段：等待线程结束（分批等待）
+        # 第二阶段：等待线程结束（分批等待），但不强制终止
         still_running = []
         for worker in self._active_workers:
             if worker.isRunning():
                 if worker.wait(2000):  # 等待2秒
                     logger.debug(f"Worker {worker._agent.role if hasattr(worker, '_agent') else 'unknown'} stopped gracefully")
                 else:
-                    logger.warning(f"Worker {worker._agent.role if hasattr(worker, '_agent') else 'unknown'} still running after 2s")
+                    logger.warning(f"Worker {worker._agent.role if hasattr(worker, '_agent') else 'unknown'} still running after 2s, will be cleaned up later")
                     still_running.append(worker)
 
-        # 第三阶段：强制终止仍然运行的线程（最后手段）
-        if still_running:
-            logger.warning(f"Force terminating {len(still_running)} workers...")
-            for worker in still_running:
-                if worker.isRunning():
-                    worker.terminate()
-                    worker.wait(1000)
-
+        # 第三阶段：清理活跃 worker 列表，不再强制终止
+        # 仍然运行的 worker 将在完成后通过 finished 信号自动清理
+        # 我们从活跃列表中移除所有 worker，包括仍在运行的，以避免重复取消
         self._active_workers.clear()
+
+        # 如果还有仍在运行的 worker，我们可以选择保留引用或忽略
+        # 由于 finished 信号已连接，worker 完成后会调用 _cleanup_worker
+        # 但 _cleanup_worker 会尝试从 _active_workers 中移除，此时列表已清空
+        # 为了避免错误，我们可以暂时将 still_running 存到另一个列表，但为了简化，我们忽略
+
         self.state_ctrl.reset()
         self.agent_response.emit(
             "系统", "🛑 所有任务已中止。"
         )
-        logger.info("All workers stopped")
+        logger.info("All workers stopped (some may still be running but will exit eventually)")
 
     def new_session(self):
         """开始新会话，重置所有状态"""

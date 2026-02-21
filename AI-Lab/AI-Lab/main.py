@@ -25,14 +25,8 @@ import logging
 
 # [FIX] Windows 平台强制 UTF-8 编码，防止 emoji 打印报错
 if sys.platform == "win32":
-    try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
-    except AttributeError:
-        # Python < 3.7
-        import codecs
-        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
-        sys.stderr = codecs.getwriter("utf-8")(sys.stderr.detach())
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
 
 # 禁用 CrewAI Telemetry 防止 SSL 报错 (必须在导入 crewai 前设置)
 os.environ["CREWAI_TELEMETRY_OPT_OUT"] = "true"
@@ -314,6 +308,13 @@ class MainWindow(QMainWindow):
             self.warroom_panel.filter_messages
         )
 
+        # ============================================================
+        #  Orchestrator → 流式输出处理
+        # ============================================================
+        self.orchestrator.agent_stream_chunk.connect(
+            self._on_agent_stream_chunk
+        )
+
     # ==================================================================
     #  信号处理槽函数
     # ==================================================================
@@ -361,28 +362,26 @@ class MainWindow(QMainWindow):
             lang_match = re.search(r"```([a-zA-Z]+)", content)
             if lang_match:
                 lang = lang_match.group(1).lower()
-                if lang in ["python", "py"]:
-                    filename = "generated.py"
-                elif lang in ["javascript", "js"]:
-                    filename = "generated.js"
-                elif lang in ["typescript", "ts"]:
-                    filename = "generated.ts"
-                elif lang in ["java"]:
-                    filename = "Generated.java"
-                elif lang in ["cpp", "c++"]:
-                    filename = "generated.cpp"
-                elif lang in ["go"]:
-                    filename = "generated.go"
-                elif lang in ["rust"]:
-                    filename = "generated.rs"
-                elif lang in ["html"]:
-                    filename = "generated.html"
-                elif lang in ["css"]:
-                    filename = "generated.css"
-                elif lang in ["markdown", "md"]:
-                    filename = "generated.md"
-                elif lang in ["json"]:
-                    filename = "generated.json"
+                # 语言到文件扩展名的映射表
+                EXTENSION_MAP = {
+                    "python": "generated.py",
+                    "py": "generated.py",
+                    "javascript": "generated.js",
+                    "js": "generated.js",
+                    "typescript": "generated.ts",
+                    "ts": "generated.ts",
+                    "java": "Generated.java",
+                    "cpp": "generated.cpp",
+                    "c++": "generated.cpp",
+                    "go": "generated.go",
+                    "rust": "generated.rs",
+                    "html": "generated.html",
+                    "css": "generated.css",
+                    "markdown": "generated.md",
+                    "md": "generated.md",
+                    "json": "generated.json",
+                }
+                filename = EXTENSION_MAP.get(lang, "generated.py")
             self.execution_panel.set_code(code, filename=filename)
 
         # 6. 结构化系统日志标签处理
@@ -408,6 +407,13 @@ class MainWindow(QMainWindow):
                 self.execution_panel.append_log(content, level="error")
             else:
                 self.execution_panel.append_log(content, level="info")
+
+    def _on_agent_stream_chunk(self, role: str, chunk: str):
+        """处理 Agent 流式输出片段"""
+        # 转发到 War Room 面板进行打字机效果显示
+        self.warroom_panel.append_stream_chunk(role, chunk)
+        # 同时记录到执行面板日志（可选，用于调试）
+        self.execution_panel.append_log(f"[{role}] 流式输出: {chunk}", level="debug")
 
     def _on_confirm_project(self):
         """用户点击 Confirm Project 按钮"""
@@ -512,7 +518,7 @@ def main():
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         error_msg = f"[{timestamp}] CRITICAL ERROR:\n"
         error_msg += "".join(traceback.format_exception(exctype, value, traceback_obj))
-        
+
         # 写入日志文件
         with open("crash.log", "a", encoding="utf-8") as f:
             f.write(error_msg + "\n" + "="*80 + "\n")
@@ -523,6 +529,26 @@ def main():
         except:
             # logger可能不可用，保留原始print
             print(error_msg)
+
+        # 尝试在主线程显示错误弹窗（如果 QApplication 已创建）
+        try:
+            from PyQt6.QtWidgets import QApplication, QMessageBox
+            from PyQt6.QtCore import QTimer
+            app = QApplication.instance()
+            if app is not None:
+                # 使用 QTimer.singleShot 确保在主线程执行
+                def show_error():
+                    QMessageBox.critical(
+                        None,
+                        "严重错误",
+                        "发生严重错误，已记录到日志。\n\n"
+                        "请检查 crash.log 文件获取详细信息。"
+                    )
+                QTimer.singleShot(0, show_error)
+        except Exception as e:
+            # 弹窗失败不影响错误记录
+            print(f"Failed to show error dialog: {e}")
+
         sys.__excepthook__(exctype, value, traceback_obj)
 
     sys.excepthook = exception_hook

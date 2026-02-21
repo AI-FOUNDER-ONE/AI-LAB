@@ -94,8 +94,61 @@ class PMAgent(BaseAgent):
 
     def _register_tools(self):
         """注册 PM 专用工具"""
+        # 首先注册三个核心工作流工具
+        try:
+            # 工具1: 委托发言权给特定角色
+            def delegate_to_role(role_name: str, instruction: str = "") -> str:
+                """将发言权委托给指定角色，可以附带简要指令。"""
+                import json
+                return json.dumps({
+                    "action": "delegate",
+                    "role": role_name,
+                    "instruction": instruction
+                }, ensure_ascii=False)
+
+            self.register_tool(
+                delegate_to_role,
+                name="delegate_to_role",
+                description="将发言权委托给指定角色（Arch、Designer、Coder、Tester、CKO）。可以附带简要指令。"
+            )
+
+            # 工具2: 批准方案
+            def approve_solution(reason: str) -> str:
+                """批准当前方案，进入下一阶段。"""
+                import json
+                return json.dumps({
+                    "action": "approve",
+                    "reason": reason
+                }, ensure_ascii=False)
+
+            self.register_tool(
+                approve_solution,
+                name="approve_solution",
+                description="批准当前方案，进入下一阶段。需要提供批准理由。"
+            )
+
+            # 工具3: 驳回方案
+            def reject_solution(reason: str) -> str:
+                """驳回当前方案，要求重新讨论。"""
+                import json
+                return json.dumps({
+                    "action": "reject",
+                    "reason": reason
+                }, ensure_ascii=False)
+
+            self.register_tool(
+                reject_solution,
+                name="reject_solution",
+                description="驳回当前方案，要求重新讨论。需要提供驳回理由。"
+            )
+
+            print(f"[PMAgent] 已注册核心工作流工具: delegate_to_role, approve_solution, reject_solution")
+        except Exception as e:
+            print(f"[PMAgent] 核心工作流工具注册失败: {e}")
+
+        # 原有风险评估工具（可选）
         if not TOOLS_AVAILABLE or RiskAssessmentTool is None:
-            print("[PMAgent] 工具不可用，跳过注册")
+            print("[PMAgent] 风险评估工具不可用，跳过注册")
             return
 
         try:
@@ -112,9 +165,9 @@ class PMAgent(BaseAgent):
             self.register_tool(assess_risk, name="risk_assessor",
                              description="对项目方案进行多维度风险评估。输入项目描述，输出包含技术、时间、成本、团队、依赖、市场等维度的结构化风险评估报告。")
 
-            print(f"[PMAgent] 已注册 {len(self.tools)} 个工具")
+            print(f"[PMAgent] 已注册 {len(self.tools)} 个工具（包含风险评估工具）")
         except Exception as e:
-            print(f"[PMAgent] 工具注册失败: {e}")
+            print(f"[PMAgent] 风险评估工具注册失败: {e}")
 
     def _init_client(self):
         """延迟初始化客户端"""
