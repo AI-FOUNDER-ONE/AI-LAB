@@ -62,14 +62,42 @@ class TesterAgent(BaseAgent):
             except ImportError:
                 raise ImportError("请安装 openai: pip install openai")
 
-    def _call_api(self, messages: list) -> str:
-        """调用 DeepSeek API"""
+    def _call_api(self, messages: list, tools: list = None) -> str:
+        """调用 DeepSeek API，支持原生 Function Calling"""
         self._init_client()
 
-        response = self._client.chat.completions.create(
-            model=self.model_config["model"],
-            messages=messages,
-            temperature=0.7,
-            max_tokens=2000,
-        )
-        return response.choices[0].message.content
+        # 准备 API 调用参数
+        api_kwargs = {
+            "model": self.model_config["model"],
+            "messages": messages,
+            "temperature": 0.7,
+            "max_tokens": 2000,
+        }
+
+        # 如果提供了工具列表，添加到参数中
+        if tools:
+            api_kwargs["tools"] = tools
+            api_kwargs["tool_choice"] = "auto"
+
+        response = self._client.chat.completions.create(**api_kwargs)
+
+        # 检查是否有工具调用
+        message = response.choices[0].message
+        if hasattr(message, 'tool_calls') and message.tool_calls:
+            # 返回结构化响应，包含工具调用
+            tool_calls = []
+            for tool_call in message.tool_calls:
+                tool_calls.append({
+                    "id": tool_call.id,
+                    "type": tool_call.type,
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments
+                    }
+                })
+            return {
+                "content": message.content or "",
+                "tool_calls": tool_calls
+            }
+        else:
+            return message.content or ""

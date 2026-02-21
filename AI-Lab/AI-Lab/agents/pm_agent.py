@@ -7,6 +7,16 @@ pm_agent.py - PM 项目经理 (通义千问)
 from agents.base_agent import BaseAgent
 from config import API_KEYS
 
+# 尝试导入工具
+try:
+    from tools.risk_assessment_tool import RiskAssessmentTool
+    TOOLS_AVAILABLE = True
+except ImportError as e:
+    # 工具可能不可用，提供空值
+    TOOLS_AVAILABLE = False
+    RiskAssessmentTool = None
+    print(f"[PMAgent] 工具导入警告: {e}. 原生Function Calling工具将不可用。")
+
 
 PM_SYSTEM_PROMPT = """你是 AI-Lab-Commander 的 PM（项目经理），代号"决策裁判"。
 你的核心职责：
@@ -79,6 +89,33 @@ class PMAgent(BaseAgent):
         )
         self._client = None
 
+        # 注册原生 Function Calling 工具
+        self._register_tools()
+
+    def _register_tools(self):
+        """注册 PM 专用工具"""
+        if not TOOLS_AVAILABLE or RiskAssessmentTool is None:
+            print("[PMAgent] 工具不可用，跳过注册")
+            return
+
+        try:
+            # RiskAssessmentTool - 风险评估工具
+            risk_assessor = RiskAssessmentTool()
+            def assess_risk(project_description: str, assessment_depth: str = "standard",
+                          industry: str = "software") -> str:
+                """对项目方案进行多维度风险评估"""
+                return risk_assessor._run(
+                    project_description=project_description,
+                    assessment_depth=assessment_depth,
+                    industry=industry
+                )
+            self.register_tool(assess_risk, name="risk_assessor",
+                             description="对项目方案进行多维度风险评估。输入项目描述，输出包含技术、时间、成本、团队、依赖、市场等维度的结构化风险评估报告。")
+
+            print(f"[PMAgent] 已注册 {len(self.tools)} 个工具")
+        except Exception as e:
+            print(f"[PMAgent] 工具注册失败: {e}")
+
     def _init_client(self):
         """延迟初始化客户端"""
         if self._client is None:
@@ -123,13 +160,42 @@ class PMAgent(BaseAgent):
                 except ImportError:
                     raise ImportError("请安装 openai: pip install openai")
 
-    def _call_api(self, messages: list) -> str:
-        """调用通义千问 API"""
+    def _call_api(self, messages: list, tools: list = None) -> str:
+        """调用通义千问 API，支持原生 Function Calling"""
         self._init_client()
-        response = self._client.chat.completions.create(
-            model=self.model_config["model"],
-            messages=messages,
-            temperature=0.7,
-            max_tokens=2000,
-        )
-        return response.choices[0].message.content
+
+        # 准备 API 调用参数
+        api_kwargs = {
+            "model": self.model_config["model"],
+            "messages": messages,
+            "temperature": 0.7,
+            "max_tokens": 2000,
+        }
+
+        # 如果提供了工具列表，添加到参数中
+        if tools:
+            api_kwargs["tools"] = tools
+            api_kwargs["tool_choice"] = "auto"
+
+        response = self._client.chat.completions.create(**api_kwargs)
+
+        # 检查是否有工具调用（PM 通常不需要工具，但保持接口一致）
+        message = response.choices[0].message
+        if hasattr(message, 'tool_calls') and message.tool_calls:
+            # 返回结构化响应，包含工具调用
+            tool_calls = []
+            for tool_call in message.tool_calls:
+                tool_calls.append({
+                    "id": tool_call.id,
+                    "type": tool_call.type,
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments
+                    }
+                })
+            return {
+                "content": message.content or "",
+                "tool_calls": tool_calls
+            }
+        else:
+            return message.content or ""

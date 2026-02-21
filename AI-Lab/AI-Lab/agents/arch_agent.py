@@ -7,6 +7,20 @@ arch_agent.py - Architect 架构师 (Claude)
 from agents.base_agent import BaseAgent
 from config import API_KEYS
 
+# 尝试导入工具
+try:
+    from tools.mermaid_tool import MermaidTool
+    from tools.architecture_evaluator_tool import ArchitectureEvaluatorTool
+    from tools.dependency_analyzer_tool import DependencyAnalyzerTool
+    TOOLS_AVAILABLE = True
+except ImportError as e:
+    # 工具可能不可用，提供空值
+    TOOLS_AVAILABLE = False
+    MermaidTool = None
+    ArchitectureEvaluatorTool = None
+    DependencyAnalyzerTool = None
+    print(f"[ArchAgent] 工具导入警告: {e}. 原生Function Calling工具将不可用。")
+
 
 ARCH_SYSTEM_PROMPT = """你是 AI-Lab-Commander 的 Architect（架构师），代号"逻辑构建者"。
 你的核心职责：
@@ -56,6 +70,57 @@ class ArchAgent(BaseAgent):
             parent=parent,
         )
         self._client = None
+
+        # 注册原生 Function Calling 工具
+        self._register_tools()
+
+    def _register_tools(self):
+        """注册 Arch 专用工具"""
+        if not TOOLS_AVAILABLE or (MermaidTool is None and ArchitectureEvaluatorTool is None and DependencyAnalyzerTool is None):
+            print("[ArchAgent] 工具不可用，跳过注册")
+            return
+
+        try:
+            # 1. MermaidTool - Mermaid图表生成工具
+            mermaid_tool = MermaidTool()
+            def generate_mermaid(diagram_type: str, content: str) -> str:
+                """生成Mermaid图表代码"""
+                return mermaid_tool._run(diagram_type=diagram_type, content=content)
+            self.register_tool(generate_mermaid, name="mermaid_generator",
+                             description="生成Mermaid图表代码。支持流程图、序列图、类图、状态图等。输入图表类型和内容描述，输出Mermaid代码。")
+
+            # 2. ArchitectureEvaluatorTool - 架构评估工具
+            arch_evaluator = ArchitectureEvaluatorTool()
+            def evaluate_architecture(architecture_description: str, evaluation_focus: str = "comprehensive",
+                                     project_scale: str = "medium") -> str:
+                """对架构方案进行多维度评估"""
+                return arch_evaluator._run(
+                    architecture_description=architecture_description,
+                    evaluation_focus=evaluation_focus,
+                    project_scale=project_scale
+                )
+            self.register_tool(evaluate_architecture, name="architecture_evaluator",
+                             description="对架构方案进行多维度评估，考虑可扩展性、可维护性、性能、安全性、成本等因素。输入架构描述，输出结构化评估报告和改进建议。")
+
+            # 3. DependencyAnalyzerTool - 依赖关系分析工具
+            if DependencyAnalyzerTool is not None:
+                dependency_analyzer = DependencyAnalyzerTool()
+                def analyze_dependencies(target: str, analysis_type: str = "external",
+                                       depth: str = "standard") -> str:
+                    """分析代码或项目的依赖关系"""
+                    return dependency_analyzer._run(
+                        target=target,
+                        analysis_type=analysis_type,
+                        depth=depth
+                    )
+                self.register_tool(analyze_dependencies, name="dependency_analyzer",
+                                 description="分析代码或项目的依赖关系。支持外部依赖、内部模块依赖、版本冲突、循环依赖检测等功能。输入分析目标，输出结构化依赖分析报告。")
+            else:
+                print("[ArchAgent] DependencyAnalyzerTool不可用，跳过注册")
+
+            print(f"[ArchAgent] 已注册 {len(self.tools)} 个工具")
+        except Exception as e:
+            print(f"[ArchAgent] 工具注册失败: {e}")
 
     def _init_client(self):
         """延迟初始化客户端"""
@@ -130,8 +195,8 @@ class ArchAgent(BaseAgent):
 
 
 
-    def _call_api(self, messages: list) -> str:
-        """调用 AI API"""
+    def _call_api(self, messages: list, tools: list = None) -> str:
+        """调用 AI API，支持原生 Function Calling"""
         print(f"DEBUG: ArchAgent._call_api called with {len(messages)} messages")
         self._init_client()
         provider = self.model_config.get("provider", "openai")
@@ -143,10 +208,10 @@ class ArchAgent(BaseAgent):
                 api_key = API_KEYS.get("gemini", "")
                 if not api_key:
                     raise ValueError("GEMINI_API_KEY 未配置")
-                
+
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(self.model_config["model"])
-                
+
                 prompt = ""
                 for msg in messages:
                     role = msg["role"]
@@ -157,7 +222,7 @@ class ArchAgent(BaseAgent):
                         prompt += f"User: {content}\n"
                     elif role == "assistant":
                         prompt += f"Model: {content}\n"
-                
+
                 response = model.generate_content(prompt)
                 content = response.text
                 print(f"DEBUG: ArchAgent (gemini-native) response received: {len(content)} chars")
@@ -168,7 +233,7 @@ class ArchAgent(BaseAgent):
 
         try:
             if provider == "zhipuai":
-                # 智谱 GLM 调用
+                # 智谱 GLM 调用（可能不支持工具调用）
                 response = self._client.chat.completions.create(
                     model=self.model_config["model"],
                     messages=messages,
@@ -178,19 +243,47 @@ class ArchAgent(BaseAgent):
                 content = response.choices[0].message.content
                 print(f"DEBUG: ArchAgent (zhipuai) response received: {len(content)} chars")
                 return content
-            
+
             elif provider in ("openai", "xai", "hiapi", "volcengine"):
-                # OpenAI / xAI / HiAPI 调用
-                response = self._client.chat.completions.create(
-                    model=self.model_config["model"],
-                    messages=messages,
-                    temperature=0.7,
-                    max_tokens=8000,
-                )
-                content = response.choices[0].message.content
-                print(f"DEBUG: ArchAgent ({provider}) response received: {len(content)} chars")
-                return content
-            
+                # OpenAI / xAI / HiAPI / 火山引擎调用（支持工具调用）
+                # 准备 API 调用参数
+                api_kwargs = {
+                    "model": self.model_config["model"],
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "max_tokens": 8000,
+                }
+
+                # 如果提供了工具列表，添加到参数中
+                if tools:
+                    api_kwargs["tools"] = tools
+                    api_kwargs["tool_choice"] = "auto"
+
+                response = self._client.chat.completions.create(**api_kwargs)
+
+                # 检查是否有工具调用
+                message = response.choices[0].message
+                if hasattr(message, 'tool_calls') and message.tool_calls:
+                    # 返回结构化响应，包含工具调用
+                    tool_calls = []
+                    for tool_call in message.tool_calls:
+                        tool_calls.append({
+                            "id": tool_call.id,
+                            "type": tool_call.type,
+                            "function": {
+                                "name": tool_call.function.name,
+                                "arguments": tool_call.function.arguments
+                            }
+                        })
+                    return {
+                        "content": message.content or "",
+                        "tool_calls": tool_calls
+                    }
+                else:
+                    content = message.content or ""
+                    print(f"DEBUG: ArchAgent ({provider}) response received: {len(content)} chars")
+                    return content
+
             return "⚠️ 未知的模型提供商配置"
         except Exception as e:
             print(f"DEBUG: ArchAgent API Error: {e}")

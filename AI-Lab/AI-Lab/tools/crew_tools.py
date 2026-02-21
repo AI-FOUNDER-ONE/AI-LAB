@@ -11,9 +11,28 @@ crew_tools.py - CrewAI 自定义工具集（增强版）
   ✅ 文件大小限制 (50MB)
 """
 
-from crewai.tools import BaseTool
-from typing import Type
+from typing import Type, Callable, Any
 from pydantic import BaseModel, Field
+
+# 尝试导入 crewai，如果失败则提供本地替代
+try:
+    from crewai.tools import BaseTool
+    CREWAI_AVAILABLE = True
+except ImportError:
+    CREWAI_AVAILABLE = False
+    # 提供本地 BaseTool 替代
+    class BaseTool:
+        """本地 BaseTool 替代，用于在没有 crewai 的情况下运行"""
+        name: str = ""
+        description: str = ""
+        args_schema: Type[BaseModel] = None
+
+        def __init__(self, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+        def _run(self, **kwargs) -> str:
+            raise NotImplementedError("Subclasses must implement _run method")
 
 
 # ==============================================================================

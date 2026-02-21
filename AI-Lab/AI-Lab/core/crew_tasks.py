@@ -5,7 +5,7 @@ from crewai import Task
 # ============================================================
 
 def create_grounding_task(agent):
-    """创建 Grounding 任务 (KE)"""
+    """创建 Grounding 任务 (CKO)"""
     return Task(
         description='''分析用户需求并定义清晰的任务协议。
         1. 如果用户输入仅为问候（如"你好"），请礼貌回复并提出 3-5 个结构化追问。

@@ -48,6 +48,8 @@ class BaseAgent(QObject):
         self._messages = []
         self._is_active = False
         self.max_history_length = 50  # 限制消息历史长度，防止内存增长
+        self.tools = []  # 注册的工具列表，用于原生 Function Calling
+        self._tools_schema_cache = None  # 工具JSON Schema缓存
 
         # 初始化消息历史
         if system_prompt:
@@ -55,6 +57,68 @@ class BaseAgent(QObject):
                 "role": "system",
                 "content": system_prompt,
             })
+
+    def register_tool(self, tool_callable, name=None, description=None, parameters_schema=None):
+        """注册一个工具，用于原生 Function Calling
+
+        Args:
+            tool_callable: 可调用的 Python 函数
+            name: 工具名称（默认为函数名）
+            description: 工具描述
+            parameters_schema: JSON Schema 格式的参数定义
+        """
+        import inspect
+        import json
+
+        tool_name = name or tool_callable.__name__
+        tool_desc = description or (tool_callable.__doc__ or "No description")
+
+        # 自动从函数签名提取参数 schema（简化版）
+        if parameters_schema is None:
+            sig = inspect.signature(tool_callable)
+            params = {}
+            required = []
+            for param_name, param in sig.parameters.items():
+                if param_name == 'self':
+                    continue
+                param_type = param.annotation if param.annotation != inspect.Parameter.empty else str
+                param_default = param.default if param.default != inspect.Parameter.empty else None
+
+                # 简化类型映射
+                type_map = {
+                    str: "string",
+                    int: "integer",
+                    float: "number",
+                    bool: "boolean",
+                    list: "array",
+                    dict: "object"
+                }
+                param_type_str = type_map.get(param_type, "string")
+
+                param_schema = {"type": param_type_str}
+                if param_default is not None:
+                    param_schema["default"] = param_default
+                else:
+                    required.append(param_name)
+
+                params[param_name] = param_schema
+
+            parameters_schema = {
+                "type": "object",
+                "properties": params,
+                "required": required if required else None
+            }
+
+        tool_def = {
+            "name": tool_name,
+            "description": tool_desc,
+            "callable": tool_callable,
+            "parameters": parameters_schema
+        }
+        self.tools.append(tool_def)
+        # 清除工具schema缓存，因为工具列表已更改
+        self._tools_schema_cache = None
+        return tool_name
 
     def update_system_prompt(self, new_prompt: str):
         """Dynamic System Prompt Injection"""
@@ -111,6 +175,155 @@ class BaseAgent(QObject):
         """Agent 是否正在处理请求"""
         return self._is_active
 
+    def _get_tools_schema(self):
+        """获取工具的JSON Schema（带缓存）"""
+        if self._tools_schema_cache is not None:
+            return self._tools_schema_cache
+
+        tools_schema = []
+        for tool_def in self.tools:
+            tools_schema.append({
+                "type": "function",
+                "function": {
+                    "name": tool_def["name"],
+                    "description": tool_def["description"],
+                    "parameters": tool_def["parameters"]
+                }
+            })
+
+        self._tools_schema_cache = tools_schema
+        return tools_schema
+
+    def _execute_tool_with_timeout(self, tool_def, args, timeout_seconds=30):
+        """带超时控制的工具执行
+
+        Args:
+            tool_def: 工具定义字典
+            args: 工具参数字典
+            timeout_seconds: 超时时间（秒）
+
+        Returns:
+            工具执行结果字符串
+
+        Raises:
+            TimeoutError: 如果工具执行超时
+            Exception: 工具执行过程中的其他异常
+        """
+        import threading
+        import queue
+
+        result_queue = queue.Queue()
+
+        def _run_tool():
+            try:
+                result = tool_def['callable'](**args)
+                result_queue.put(result)
+            except Exception as e:
+                result_queue.put(e)
+
+        thread = threading.Thread(target=_run_tool)
+        thread.daemon = True
+        thread.start()
+        thread.join(timeout=timeout_seconds)
+
+        if thread.is_alive():
+            raise TimeoutError(f"Tool execution timed out after {timeout_seconds} seconds")
+
+        if not result_queue.empty():
+            result = result_queue.get()
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        raise RuntimeError("Tool execution failed without result or exception")
+
+    def _call_api_with_tools(self, messages: list) -> str:
+        """带有工具调用循环的 API 调用（默认实现，子类可覆盖）
+
+        Args:
+            messages: 完整的消息历史列表
+
+        Returns:
+            最终回复文本（所有工具调用结果已整合）
+        """
+        # 获取工具的JSON Schema（使用缓存）
+        tools_schema = self._get_tools_schema()
+
+        # 最大递归深度防止无限循环
+        max_iterations = 10
+        for iteration in range(max_iterations):
+            # 调用子类的 _call_api，传递工具 schema（如果支持）
+            # 子类可以覆盖此方法以原生支持工具调用
+            try:
+                # 尝试调用支持工具的 _call_api（如果子类实现）
+                response = self._call_api(messages, tools=tools_schema if tools_schema else None)
+            except TypeError:
+                # 子类 _call_api 不支持 tools 参数，回退到无工具调用
+                response = self._call_api(messages)
+
+            # 假设 response 是一个字典，包含 'content' 和 'tool_calls' 字段
+            # 或者是一个字符串（无工具调用）
+            if isinstance(response, dict):
+                content = response.get('content', '')
+                tool_calls = response.get('tool_calls', [])
+                if tool_calls:
+                    # 执行工具调用并将结果追加到消息历史
+                    for tool_call in tool_calls:
+                        # 支持两种工具调用格式：直接字段或嵌套 function 字段
+                        if 'function' in tool_call:
+                            # OpenAI 格式：tool_call['function']['name']、['arguments']
+                            func_name = tool_call['function'].get('name')
+                            args_str = tool_call['function'].get('arguments', '{}')
+                        else:
+                            # 扁平格式：tool_call['name']、['arguments']
+                            func_name = tool_call.get('name')
+                            args_str = tool_call.get('arguments', '{}')
+
+                        # 解析 JSON 参数字符串
+                        try:
+                            import json
+                            args = json.loads(args_str) if isinstance(args_str, str) else args_str
+                        except:
+                            args = {}
+                        # 查找对应的工具定义
+                        tool_def = next((t for t in self.tools if t['name'] == func_name), None)
+                        if tool_def:
+                            try:
+                                # 执行工具（带超时控制）
+                                result = self._execute_tool_with_timeout(tool_def, args, timeout_seconds=30)
+                                # 将工具结果添加到消息历史
+                                messages.append({
+                                    "role": "tool",
+                                    "content": str(result),
+                                    "tool_call_id": tool_call.get('id', ''),
+                                    "name": func_name
+                                })
+                            except Exception as e:
+                                messages.append({
+                                    "role": "tool",
+                                    "content": f"Error: {str(e)}",
+                                    "tool_call_id": tool_call.get('id', ''),
+                                    "name": func_name
+                                })
+                        else:
+                            messages.append({
+                                "role": "tool",
+                                "content": f"Tool '{func_name}' not found",
+                                "tool_call_id": tool_call.get('id', ''),
+                                "name": func_name
+                            })
+                    # 继续循环，让模型基于工具结果生成回复
+                    continue
+                else:
+                    # 没有工具调用，返回内容
+                    return content
+            else:
+                # 返回字符串，无工具调用
+                return response
+
+        # 达到最大迭代次数
+        return "Tool call loop exceeded maximum iterations."
+
     def send_message(self, content: str) -> str:
         """发送消息并获取回复（同步方法，由 QThread 调用）
 
@@ -130,8 +343,8 @@ class BaseAgent(QObject):
         })
 
         try:
-            # 调用具体实现的 API 调用方法
-            response = self._call_api(self._messages)
+            # 调用带有工具调用支持的 API 方法
+            response = self._call_api_with_tools(self._messages)
 
             # 添加助手回复到历史
             self._messages.append({
@@ -152,14 +365,15 @@ class BaseAgent(QObject):
             self.typing_finished.emit(self.role)
 
     @abstractmethod
-    def _call_api(self, messages: list) -> str:
+    def _call_api(self, messages: list, tools: list = None) -> str:
         """调用具体的 AI API（子类实现）
 
         Args:
             messages: 完整的消息历史列表
+            tools: 可选的工具定义列表，用于原生 Function Calling
 
         Returns:
-            API 返回的文本回复
+            API 返回的文本回复（或包含 content 和 tool_calls 的字典）
         """
         raise NotImplementedError
 

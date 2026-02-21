@@ -310,19 +310,23 @@ class OrchestratorDynamic(QObject):
              # unless it's a multi-part message? Let's strictly enforce turn-taking for now.
              pass
              
-        # 3. Special Handling: PM Decision Parsing
-        if last_msg and last_msg.role == "PM" and "APPROVED" in last_msg.content:
-             if current_state == AppState.DEBATE:
-                 self.state_ctrl.transition_to(AppState.PRODUCTION)
-                 self.agent_response.emit("System", f"PM Approved Plan. Moving to PRODUCTION ({self.ctx.task_type}).")
-                 # Trigger initial coder kickoff by adding a system nudge
-                 self.ctx.add_message("System", f"Phase changed to PRODUCTION. Team, please execute the {self.ctx.task_type} plan.")
-                 self._next_turn_ready.emit()
-                 return
-        
-        # 4. Delivery Handling
-        if last_msg and last_msg.role == "PM" and "DELIVER" in last_msg.content:
-            if current_state == AppState.VERIFICATION:
+        # 3. Special Handling: PM Decision Parsing (Structured System Commands)
+        if last_msg and last_msg.role == "PM":
+            content = last_msg.content
+            # Match structured system command: <SYS_CMD:APPROVE> or legacy "APPROVED"
+            if (re.search(r'<SYS_CMD:(APPROVE|APPROVED)>', content, re.IGNORECASE) or "APPROVED" in content) and current_state == AppState.DEBATE:
+                self.state_ctrl.transition_to(AppState.PRODUCTION)
+                self.agent_response.emit("System", f"PM Approved Plan. Moving to PRODUCTION ({self.ctx.task_type}).")
+                # Trigger initial coder kickoff by adding a system nudge
+                self.ctx.add_message("System", f"Phase changed to PRODUCTION. Team, please execute the {self.ctx.task_type} plan.")
+                self._next_turn_ready.emit()
+                return
+
+        # 4. Delivery Handling (Structured System Commands)
+        if last_msg and last_msg.role == "PM":
+            content = last_msg.content
+            # Match structured system command: <SYS_CMD:DELIVER> or legacy "DELIVER"
+            if (re.search(r'<SYS_CMD:(DELIVER)>', content, re.IGNORECASE) or "DELIVER" in content) and current_state == AppState.VERIFICATION:
                 self._start_delivery()
                 return
 
@@ -356,7 +360,8 @@ class OrchestratorDynamic(QObject):
         worker = AgentWorker(agent, prompt) # Worker is local class
         worker.finished_with_result.connect(self._on_agent_finished)
         worker.error_occurred.connect(lambda r, e: self.error_occurred.emit(e)) # Simplified string error
-        
+        worker.finished.connect(worker.deleteLater)  # Fix memory leak
+
         self._active_worker = worker # Keep ref
         worker.start()
 

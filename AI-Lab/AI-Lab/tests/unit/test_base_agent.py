@@ -12,8 +12,12 @@ from config import AGENT_MODELS
 class MockAgent(BaseAgent):
     """Concrete implementation of BaseAgent for testing."""
 
-    def _call_api(self, messages: list) -> str:
+    def _call_api(self, messages: list, tools: list = None) -> str:
         """Mock API call that returns a fixed response."""
+        # 模拟工具调用支持
+        if tools:
+            # 如果有工具，返回模拟工具调用结果
+            return f"Mock response with {len(tools)} tools to: {messages[-1]['content']}"
         return f"Mock response to: {messages[-1]['content']}"
 
 

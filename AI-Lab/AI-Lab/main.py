@@ -50,7 +50,7 @@ from PyQt6.QtGui import QFont, QAction
 from config import APP_TITLE, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT
 from core.orchestrator import Orchestrator
 from core.logger import setup_logging, logger
-from core.commander_crew_v2 import CommanderCrew
+from core.orchestrator_dynamic import OrchestratorDynamic
 from ui.bridge_panel import BridgePanel
 from ui.warroom_panel import WarRoomPanel
 from ui.execution_panel import ExecutionPanel
@@ -76,8 +76,8 @@ class MainWindow(QMainWindow):
         # 应用全局暗色主题样式
         self.setStyleSheet(get_main_stylesheet())
 
-        # ------ 创建 CrewAI 编排管理器 ------
-        self.orchestrator = CommanderCrew(self)
+        # ------ 创建动态编排引擎 ------
+        self.orchestrator = OrchestratorDynamic(self)
 
         # ------ 创建 UI 面板 ------
         self.bridge_panel = BridgePanel(self)
@@ -279,10 +279,10 @@ class MainWindow(QMainWindow):
         # ============================================================
         #  CKO Agent 输入状态 → Bridge 面板
         # ============================================================
-        self.orchestrator.ke.typing_started.connect(
+        self.orchestrator.cko.typing_started.connect(
             lambda: self.bridge_panel.set_ke_typing(True)
         )
-        self.orchestrator.ke.typing_finished.connect(
+        self.orchestrator.cko.typing_finished.connect(
             lambda: self.bridge_panel.set_ke_typing(False)
         )
 
@@ -319,72 +319,95 @@ class MainWindow(QMainWindow):
     # ==================================================================
 
     def _dispatch_agent_response(self, role: str, content: str):
-        """根据角色分发 Agent 回复到对应的 UI 面板
+        """根据角色分发 Agent 回复到对应的 UI 面板（重构版 - 解耦角色硬编码）
 
         Args:
             role: Agent 角色标识
             content: 回复内容
         """
-        # print(f"[DEBUG] Main dispatching from {role}: {content[:30]}...") # DEBUG
-        
         # 获取当前状态 ID，用于标记消息
         current_state = self.orchestrator.state_ctrl.current_state
 
+        # 1. Commander 消息直接写入 War Room 并返回
         if role == "Commander":
-            # [Fix] Handle Commander role explicitly
             self.warroom_panel.append_message(role, content, state_id=current_state)
             return
 
-        if role == "KE":
-            # [Fix] KE 回复 → 双向同步
+        # 2. CKO（原 KE）特殊处理：Bridge 面板 + War Room
+        if role == "CKO":
             # 1. 始终显示在 Bridge 面板 (确保立项主要流程完整)
             self.bridge_panel.append_ke_response(content)
-            
             # 2. 同时显示在 War Room (作为公屏回应)
             self.warroom_panel.append_message(role, content, state_id=current_state)
-            
             # 3. Enable Confirm Button in Navbar
             self.btn_confirm_nav.setEnabled(True)
-
-        elif role in ("PM", "Arch", "Designer", "系统", "QA", "Tester"):
-            # 博弈阶段角色 → War Room 面板
-            if role == "系统":
-                self.warroom_panel.append_system_event(content)
-            else:
-                self.warroom_panel.append_message(role, content, state_id=current_state)
-
-        elif role == "Coder":
-            # [Fix] Coder 回复 → War Room (Chat) + Execution 面板 (Code)
-            
-            # 1. Show full context in War Room
+            # 后续处理（代码提取和日志标签）仍然执行
+        # 3. 系统消息特殊处理
+        elif role == "系统":
+            self.warroom_panel.append_system_event(content)
+            # 后续处理（代码提取和日志标签）仍然执行
+        else:
+            # 4. 所有其他角色消息统一写入 War Room
             self.warroom_panel.append_message(role, content, state_id=current_state)
-            
-            # 2. Extract code block for Execution Panel
-            import re
-            code_match = re.search(r"```python(.*?)```", content, re.DOTALL)
-            if code_match:
-                code = code_match.group(1).strip()
-                self.execution_panel.set_code(code, filename="generated.py")
-            else:
-                # If no code block, maybe just show it as comments or just update status?
-                # User wants "response in dialog box", done.
-                # User likely expects code in Exec panel too.
-                # If no code block, do nothing in Exec panel (or maybe just log it?)
-                pass
 
-        elif role == "Tester":
-            # Tester 回复 → Execution 面板（日志区）
-            # 根据结果判断日志级别
+        # 5. 增强正则提取所有语言的代码块（支持多语言）
+        import re
+        code_match = re.search(r"```[a-zA-Z]*\n(.*?)```", content, re.DOTALL)
+        if code_match:
+            code = code_match.group(1).strip()
+            # 默认文件名为 generated.py，可根据语言后缀调整
+            filename = "generated.py"
+            # 可选：提取语言标记
+            lang_match = re.search(r"```([a-zA-Z]+)", content)
+            if lang_match:
+                lang = lang_match.group(1).lower()
+                if lang in ["python", "py"]:
+                    filename = "generated.py"
+                elif lang in ["javascript", "js"]:
+                    filename = "generated.js"
+                elif lang in ["typescript", "ts"]:
+                    filename = "generated.ts"
+                elif lang in ["java"]:
+                    filename = "Generated.java"
+                elif lang in ["cpp", "c++"]:
+                    filename = "generated.cpp"
+                elif lang in ["go"]:
+                    filename = "generated.go"
+                elif lang in ["rust"]:
+                    filename = "generated.rs"
+                elif lang in ["html"]:
+                    filename = "generated.html"
+                elif lang in ["css"]:
+                    filename = "generated.css"
+                elif lang in ["markdown", "md"]:
+                    filename = "generated.md"
+                elif lang in ["json"]:
+                    filename = "generated.json"
+            self.execution_panel.set_code(code, filename=filename)
+
+        # 6. 结构化系统日志标签处理
+        if "<SYS_LOG:SUCCESS>" in content:
+            # 提取标签后的内容（可选）
+            log_content = content.replace("<SYS_LOG:SUCCESS>", "").strip()
+            self.execution_panel.append_log(log_content, level="success")
+        elif "<SYS_LOG:ERROR>" in content:
+            log_content = content.replace("<SYS_LOG:ERROR>", "").strip()
+            self.execution_panel.append_log(log_content, level="error")
+        elif "<SYS_LOG:INFO>" in content:
+            log_content = content.replace("<SYS_LOG:INFO>", "").strip()
+            self.execution_panel.append_log(log_content, level="info")
+        elif "<SYS_LOG:WARNING>" in content:
+            log_content = content.replace("<SYS_LOG:WARNING>", "").strip()
+            self.execution_panel.append_log(log_content, level="warning")
+
+        # 7. 兼容旧版 Tester 表情符号检测（保留向后兼容）
+        if role == "Tester":
             if "✅" in content or "测试通过" in content:
                 self.execution_panel.append_log(content, level="success")
             elif "❌" in content or "测试失败" in content:
                 self.execution_panel.append_log(content, level="error")
             else:
                 self.execution_panel.append_log(content, level="info")
-            
-            # Tester 报告也发到 War Room 并标记
-            if role == "Tester":
-                 self.warroom_panel.append_message(role, content, state_id=current_state)
 
     def _on_confirm_project(self):
         """用户点击 Confirm Project 按钮"""

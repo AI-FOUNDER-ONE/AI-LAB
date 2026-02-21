@@ -6,6 +6,22 @@ coder_agent.py - Coder 程序员 (通义千问)
 
 from agents.base_agent import BaseAgent
 from config import API_KEYS
+# 尝试导入工具，如果crewai不可用则提供空值
+try:
+    from tools.tool_schema_adapter import crew_tool_to_schema
+    from tools.crew_tools import CodeWriterTool, DocxParserTool
+    from tools.code_review_tool import CodeReviewTool
+    from tools.documentation_generator_tool import DocumentationGeneratorTool
+    TOOLS_AVAILABLE = True
+except ImportError as e:
+    # crewai可能不可用，提供空值
+    TOOLS_AVAILABLE = False
+    crew_tool_to_schema = None
+    CodeWriterTool = None
+    DocxParserTool = None
+    CodeReviewTool = None
+    DocumentationGeneratorTool = None
+    print(f"[CoderAgent] 工具导入警告: {e}. 原生Function Calling工具将不可用。")
 
 
 CODER_SYSTEM_PROMPT = """你是 AI-Lab-Commander 的 Executor（执行官）。
@@ -44,6 +60,60 @@ class CoderAgent(BaseAgent):
         )
         self._client = None
 
+        # 注册原生 Function Calling 工具（示例）
+        self._register_crew_tools()
+
+    def _register_crew_tools(self):
+        """注册 CrewAI 工具作为原生 Function Calling 工具"""
+        if not TOOLS_AVAILABLE or CodeWriterTool is None or DocxParserTool is None:
+            print("[CoderAgent] 工具不可用，跳过注册")
+            return
+
+        try:
+            # 1. CodeWriterTool - 代码写入工具
+            code_writer = CodeWriterTool()
+            def write_code(filename: str, code: str) -> str:
+                """将代码写入指定文件"""
+                return code_writer._run(filename=filename, code=code)
+            self.register_tool(write_code, name="code_writer",
+                             description="将代码写入指定文件。输入文件名和代码内容。")
+
+            # 2. DocxParserTool - 文档解析工具
+            docx_parser = DocxParserTool()
+            def parse_document(path: str) -> str:
+                """解析文档文件，提取所有内容"""
+                return docx_parser._run(path=path)
+            self.register_tool(parse_document, name="document_parser",
+                             description="深度解析文档文件，提取所有内容。支持 .docx、.pdf、.txt、.md 等格式。")
+
+            # 3. CodeReviewTool - 代码审查工具
+            if CodeReviewTool is not None:
+                code_review = CodeReviewTool()
+                def review_code(code: str, review_focus: str = "all", language: str = "python") -> str:
+                    """对代码进行静态分析，提供审查建议"""
+                    return code_review._run(code=code, review_focus=review_focus, language=language)
+                self.register_tool(review_code, name="code_reviewer",
+                                 description="对代码进行静态分析，提供审查建议。支持安全、性能、编码规范、逻辑等多方面审查。目前仅支持Python语言。")
+            else:
+                print("[CoderAgent] CodeReviewTool不可用，跳过注册")
+
+            # 4. DocumentationGeneratorTool - 文档生成工具
+            if DocumentationGeneratorTool is not None:
+                doc_generator = DocumentationGeneratorTool()
+                def generate_documentation(source: str, doc_type: str = "api",
+                                         format: str = "markdown", language: str = "python") -> str:
+                    """根据代码或需求自动生成文档"""
+                    return doc_generator._run(source=source, doc_type=doc_type,
+                                            format=format, language=language)
+                self.register_tool(generate_documentation, name="documentation_generator",
+                                 description="根据代码或需求自动生成文档。支持API文档、用户手册、技术文档、README等多种类型。输入代码或描述，输出结构化文档。")
+            else:
+                print("[CoderAgent] DocumentationGeneratorTool不可用，跳过注册")
+
+            print(f"[CoderAgent] 已注册 {len(self.tools)} 个工具")
+        except Exception as e:
+            print(f"[CoderAgent] 工具注册失败: {e}")
+
     def _init_client(self):
         """延迟初始化客户端（支持 Qwen 和 Custom Claude）"""
         if self._client is None:
@@ -73,9 +143,9 @@ class CoderAgent(BaseAgent):
             except ImportError:
                 raise ImportError("请安装 openai: pip install openai")
 
-    def _call_api(self, messages: list) -> str:
-        """调用通义千问 API
-        
+    def _call_api(self, messages: list, tools: list = None) -> str:
+        """调用通义千问 API，支持原生 Function Calling
+
         增强：自动识别文档克隆指令
         """
         self._init_client()
@@ -88,15 +158,15 @@ class CoderAgent(BaseAgent):
             user_content = messages[-1]["content"]
             if "MISSION: DOCUMENT_CLONING" in user_content or ("【原型文档】" in user_content and "【新内容】" in user_content):
                 import re
-                
+
                 # 尝试提取
                 prototype_match = re.search(r"【原型文档】[:\s]*([\s\S]*?)(?=【新内容】|$)", user_content)
                 new_content_match = re.search(r"【新内容】[:\s]*([\s\S]*)", user_content)
-                
+
                 if prototype_match and new_content_match:
                     proto = prototype_match.group(1).strip()
                     new_c = new_content_match.group(1).strip()
-                    
+
                     if proto and new_c:
                         # 触发克隆逻辑
                         return self.run_document_cloning(proto, new_c)
@@ -104,17 +174,46 @@ class CoderAgent(BaseAgent):
         # 常规调用
         provider = self.model_config.get("provider", "qwen")
         if provider == "claude_custom":
+            # Claude 自定义端点可能不支持工具调用，回退到无工具
             return self._call_api_claude(messages)
-            
-        response = self._client.chat.completions.create(
-            model=self.model_config["model"],
-            messages=messages,
-            temperature=0.7,
-            max_tokens=4000,
-        )
-        return response.choices[0].message.content
 
-    def _call_api_claude(self, messages: list) -> str:
+        # 准备 API 调用参数
+        api_kwargs = {
+            "model": self.model_config["model"],
+            "messages": messages,
+            "temperature": 0.7,
+            "max_tokens": 4000,
+        }
+
+        # 如果提供了工具列表，添加到参数中
+        if tools:
+            api_kwargs["tools"] = tools
+            api_kwargs["tool_choice"] = "auto"
+
+        response = self._client.chat.completions.create(**api_kwargs)
+
+        # 检查是否有工具调用
+        message = response.choices[0].message
+        if hasattr(message, 'tool_calls') and message.tool_calls:
+            # 返回结构化响应，包含工具调用
+            tool_calls = []
+            for tool_call in message.tool_calls:
+                tool_calls.append({
+                    "id": tool_call.id,
+                    "type": tool_call.type,
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments
+                    }
+                })
+            return {
+                "content": message.content or "",
+                "tool_calls": tool_calls
+            }
+        else:
+            return message.content or ""
+
+    def _call_api_claude(self, messages: list, tools: list = None) -> str:
         """调用 Claude Endpoint (Anthropic Native Format)"""
         import httpx
         import json

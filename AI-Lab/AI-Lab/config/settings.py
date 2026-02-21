@@ -26,7 +26,7 @@ API_KEYS = {
 
 # ---------- 角色 → 模型 映射 ----------
 AGENT_MODELS = {
-    "KE":       {"provider": "novai",           "model": "gemini-3-pro-preview-thinking", "base_url": "https://once.novai.su/v1"},
+    "CKO":      {"provider": "novai",           "model": "gemini-3-pro-preview-thinking", "base_url": "https://once.novai.su/v1"},
     "QA":       {"provider": "deepseek",       "model": "deepseek-reasoner",        "base_url": "https://api.deepseek.com"},
     "PM":       {"provider": "xai",            "model": "grok-4-0709",              "base_url": "https://api.x.ai/v1"},
     "Arch":     {"provider": "volcengine",     "model": "doubao-seed-2-0-pro-260215", "base_url": "https://ark.cn-beijing.volces.com/api/v3"},
@@ -37,7 +37,7 @@ AGENT_MODELS = {
 
 # ---------- 角色颜色与显示名 (Monochrome/Technical) ----------
 AGENT_PROFILES = {
-    "KE":       {"name": "KE",       "color": "#64748B", "icon": "◉"}, # Slate-500
+    "CKO":      {"name": "CKO",      "color": "#64748B", "icon": "◉"}, # Slate-500
     "QA":       {"name": "QA",       "color": "#0D9488", "icon": "🛡️"}, # Teal-600
     "PM":       {"name": "PM",       "color": "#475569", "icon": "▲"}, # Slate-600
     "Arch":     {"name": "Arch",     "color": "#334155", "icon": "◆"}, # Slate-700
@@ -98,7 +98,7 @@ def validate_config():
         logger.warning("部分功能可能受限")
 
     # 检查必需的角色模型配置
-    required_roles = ["KE", "QA", "PM", "Arch", "Designer", "Coder", "Tester"]
+    required_roles = ["CKO", "QA", "PM", "Arch", "Designer", "Coder", "Tester"]
     missing_roles = []
     for role in required_roles:
         if role not in AGENT_MODELS:

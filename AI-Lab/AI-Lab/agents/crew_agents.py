@@ -126,12 +126,12 @@ def create_agents(step_callback=None):
     """
     agents = {}
 
-    # KE (Knowledge Engineer) - 原 CKO
-    agents["KE"] = Agent(
-        role="KE · 知识工程师",
+    # CKO (Chief Knowledge Officer) - 原 KE
+    agents["CKO"] = Agent(
+        role="CKO · 首席知识官",
         goal="深入理解用户需求，生成结构化任务协议",
         backstory=(
-            "你是一位资深的知识工程师 (KE)，擅长需求分析和知识管理。"
+            "你是一位资深的首席知识官 (CKO)，擅长需求分析和知识管理。"
             "你的核心职责是确保项目有清晰、可执行的任务协议。\n\n"
             "## War Room 交互规则\n"
             "- 当其他人讨论需求变更时，主动用 @角色名 @PM 确认是否需要更新任务协议\n"
@@ -141,7 +141,7 @@ def create_agents(step_callback=None):
             "- 明确表态时说 '我同意…' 或 '我认为需要更多信息…'"
         ),
         verbose=True,
-        llm=get_llm("KE"),
+        llm=get_llm("CKO"),
         tools=[DocxParserTool()],
         allow_delegation=False,
         step_callback=step_callback,

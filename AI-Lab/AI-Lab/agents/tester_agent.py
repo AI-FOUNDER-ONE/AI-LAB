@@ -8,6 +8,20 @@ validator_agent.py - Validator 验证官 (DeepSeek)
 from agents.base_agent import BaseAgent
 from config import API_KEYS
 
+# 尝试导入工具
+try:
+    from tools.validation_tool import ValidationTool
+    from tools.test_case_generator_tool import TestCaseGeneratorTool
+    from tools.performance_analyzer_tool import PerformanceAnalyzerTool
+    TOOLS_AVAILABLE = True
+except ImportError as e:
+    # 工具可能不可用，提供空值
+    TOOLS_AVAILABLE = False
+    ValidationTool = None
+    TestCaseGeneratorTool = None
+    PerformanceAnalyzerTool = None
+    print(f"[TesterAgent] 工具导入警告: {e}. 原生Function Calling工具将不可用。")
+
 
 VALIDATOR_SYSTEM_PROMPT = """你是 AI-Lab-Commander 的 Validator（验证官），你的核心职责是充当"质检员"。
 你不对方案做最终决定，而是向 PM 提交客观、专业的《验证评估报告》。
@@ -54,6 +68,54 @@ class TesterAgent(BaseAgent):
         )
         self._client = None
 
+        # 注册原生 Function Calling 工具
+        self._register_tools()
+
+    def _register_tools(self):
+        """注册 Tester 专用工具"""
+        if not TOOLS_AVAILABLE or (ValidationTool is None and TestCaseGeneratorTool is None and PerformanceAnalyzerTool is None):
+            print("[TesterAgent] 工具不可用，跳过注册")
+            return
+
+        try:
+            # 1. ValidationTool - 代码验证工具
+            validator = ValidationTool()
+            def validate_code(code: str, check_style: bool = True) -> str:
+                """对 Python 代码进行静态验证和质量检查"""
+                return validator._run(code=code, check_style=check_style)
+            self.register_tool(validate_code, name="code_validator",
+                             description="对 Python 代码进行静态验证和质量检查。输入Python代码字符串，输出包含语法检查、常见问题检测、规范性建议的验证报告。")
+
+            # 2. TestCaseGeneratorTool - 测试用例生成工具
+            test_generator = TestCaseGeneratorTool()
+            def generate_test_cases(target: str, test_type: str = "unit",
+                                  framework: str = "pytest", language: str = "python") -> str:
+                """根据代码或需求自动生成测试用例"""
+                return test_generator._run(target=target, test_type=test_type,
+                                          framework=framework, language=language)
+            self.register_tool(generate_test_cases, name="test_case_generator",
+                             description="根据代码或需求自动生成测试用例。支持单元测试、集成测试、边界测试等多种测试类型。输出结构化测试用例，可直接用于测试执行。")
+
+            # 3. PerformanceAnalyzerTool - 性能分析工具
+            if PerformanceAnalyzerTool is not None:
+                performance_analyzer = PerformanceAnalyzerTool()
+                def analyze_performance(code: str, analysis_focus: str = "time_complexity",
+                                      language: str = "python") -> str:
+                    """分析代码的性能特征和潜在瓶颈"""
+                    return performance_analyzer._run(
+                        code=code,
+                        analysis_focus=analysis_focus,
+                        language=language
+                    )
+                self.register_tool(analyze_performance, name="performance_analyzer",
+                                 description="分析代码的性能特征和潜在瓶颈。支持时间复杂度分析、空间复杂度分析、算法效率评估等。输出结构化性能分析报告和优化建议。")
+            else:
+                print("[TesterAgent] PerformanceAnalyzerTool不可用，跳过注册")
+
+            print(f"[TesterAgent] 已注册 {len(self.tools)} 个工具")
+        except Exception as e:
+            print(f"[TesterAgent] 工具注册失败: {e}")
+
     def _init_client(self):
         """延迟初始化 AI 客户端"""
         if self._client is None:
@@ -95,42 +157,74 @@ class TesterAgent(BaseAgent):
                 except ImportError:
                     raise ImportError("请安装 zhipuai: pip install zhipuai")
 
-    def _call_api(self, messages: list) -> str:
-        """调用 AI API"""
+    def _call_api(self, messages: list, tools: list = None) -> str:
+        """调用 AI API，支持原生 Function Calling"""
         self._init_client()
         provider = self.model_config.get("provider", "deepseek")
 
         if provider == "deepseek":
-            response = self._client.chat.completions.create(
-                model=self.model_config["model"],
-                messages=messages,
-                temperature=0.7,
-                max_tokens=2000,
-            )
-            return response.choices[0].message.content
-        
+            # 准备 API 调用参数
+            api_kwargs = {
+                "model": self.model_config["model"],
+                "messages": messages,
+                "temperature": 0.7,
+                "max_tokens": 2000,
+            }
+
+            # 如果提供了工具列表，添加到参数中
+            if tools:
+                api_kwargs["tools"] = tools
+                api_kwargs["tool_choice"] = "auto"
+
+            response = self._client.chat.completions.create(**api_kwargs)
+
+            # 检查是否有工具调用
+            message = response.choices[0].message
+            if hasattr(message, 'tool_calls') and message.tool_calls:
+                # 返回结构化响应，包含工具调用
+                tool_calls = []
+                for tool_call in message.tool_calls:
+                    tool_calls.append({
+                        "id": tool_call.id,
+                        "type": tool_call.type,
+                        "function": {
+                            "name": tool_call.function.name,
+                            "arguments": tool_call.function.arguments
+                        }
+                    })
+                return {
+                    "content": message.content or "",
+                    "tool_calls": tool_calls
+                }
+            else:
+                return message.content or ""
+
         elif provider == "anthropic":
             # Anthropic Claude API 适配
             # 提取 system prompt
             system_prompt = ""
             active_messages = []
-            
+
             for msg in messages:
                 if msg["role"] == "system":
                     system_prompt = msg["content"]
                 else:
                     active_messages.append(msg)
-            
+
+            # Anthropic 工具调用处理（简化版）
+            # 注意：Anthropic API 工具调用格式不同，这里简化处理
             response = self._client.messages.create(
                 model=self.model_config["model"],
                 system=system_prompt,
                 messages=active_messages,
                 max_tokens=2000,
                 temperature=0.7,
+                # Anthropic tools 参数处理需要额外实现
             )
             return response.content[0].text
-            
+
         elif provider == "zhipuai":
+            # 智谱 GLM 调用（可能不支持工具调用）
             response = self._client.chat.completions.create(
                 model=self.model_config["model"],
                 messages=messages,
