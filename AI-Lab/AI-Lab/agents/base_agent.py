@@ -58,6 +58,73 @@ class BaseAgent(QObject):
                 "content": system_prompt,
             })
 
+    def _calculate_text_similarity(self, text1: str, text2: str) -> float:
+        """计算两个文本的相似度（基于Jaccard相似度）
+
+        Args:
+            text1: 第一个文本
+            text2: 第二个文本
+
+        Returns:
+            相似度分数 0.0-1.0
+        """
+        # 简单实现：基于词集的Jaccard相似度
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+
+        if not words1 and not words2:
+            return 1.0
+        if not words1 or not words2:
+            return 0.0
+
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        return len(intersection) / len(union)
+
+    def _is_duplicate_request(self, content: str, threshold: float = 0.7) -> bool:
+        """检查当前请求是否与最近的历史消息重复
+
+        Args:
+            content: 当前请求内容
+            threshold: 相似度阈值，超过则认为重复
+
+        Returns:
+            是否为重复请求
+        """
+        if not self._messages:
+            return False
+
+        # 检查最近的用户消息（最多查看最近3条）
+        recent_user_messages = []
+        for msg in reversed(self._messages):
+            if msg["role"] == "user":
+                recent_user_messages.append(msg["content"])
+                if len(recent_user_messages) >= 3:
+                    break
+
+        if not recent_user_messages:
+            return False
+
+        # 计算与最近用户消息的最大相似度
+        max_similarity = 0.0
+        for recent_content in recent_user_messages:
+            similarity = self._calculate_text_similarity(content, recent_content)
+            max_similarity = max(max_similarity, similarity)
+
+        return max_similarity >= threshold
+
+    def _handle_duplicate_request(self, content: str) -> str:
+        """处理重复请求（子类可重写此方法）
+
+        Args:
+            content: 重复的请求内容
+
+        Returns:
+            处理重复请求的响应
+        """
+        # 默认行为：返回提示信息
+        return f"【检测到相似请求】此请求与最近的历史消息相似，请基于之前的讨论继续。"
+
     def register_tool(self, tool_callable, name=None, description=None, parameters_schema=None):
         """注册一个工具，用于原生 Function Calling
 
@@ -262,13 +329,26 @@ class BaseAgent(QObject):
         max_iterations = 10
         for iteration in range(max_iterations):
             # 调用子类的 _call_api，传递工具 schema（如果支持）
-            # 子类可以覆盖此方法以原生支持工具调用
-            try:
-                # 尝试调用支持工具的 _call_api（如果子类实现）
-                response = self._call_api(messages, tools=tools_schema if tools_schema else None)
-            except TypeError:
-                # 子类 _call_api 不支持 tools 参数，回退到无工具调用
-                response = self._call_api(messages)
+            import tenacity
+            
+            def log_retry(retry_state):
+                print(f"[{self.role}] API Error/RateLimit. Retrying in {retry_state.next_action.sleep}s (Attempt {retry_state.attempt_number})...")
+                
+            @tenacity.retry(
+                wait=tenacity.wait_exponential(multiplier=1.5, min=2, max=12),
+                stop=tenacity.stop_after_attempt(5),
+                retry=tenacity.retry_if_exception_type(Exception),
+                before_sleep=log_retry
+            )
+            def _execute_api():
+                try:
+                    # 尝试调用支持工具的 _call_api（如果子类实现）
+                    return self._call_api(messages, tools=tools_schema if tools_schema else None)
+                except TypeError:
+                    # 子类 _call_api 不支持 tools 参数，回退到无工具调用
+                    return self._call_api(messages)
+            
+            response = _execute_api()
 
             # 假设 response 是一个字典，包含 'content' 和 'tool_calls' 字段
             # 或者是一个字符串（无工具调用）
@@ -365,6 +445,24 @@ class BaseAgent(QObject):
         """
         self._is_active = True
         self.typing_started.emit(self.role)
+
+        # 检查是否为重复请求（仅对PM角色启用）
+        if self.role == "PM" and self._is_duplicate_request(content):
+            duplicate_response = self._handle_duplicate_request(content)
+            # 仍然需要添加到历史记录
+            self._messages.append({
+                "role": "user",
+                "content": content,
+            })
+            self._messages.append({
+                "role": "assistant",
+                "content": duplicate_response,
+            })
+            self._emit_stream_chunks(duplicate_response)
+            self.response_ready.emit(self.role, duplicate_response)
+            self._is_active = False
+            self.typing_finished.emit(self.role)
+            return duplicate_response
 
         # 添加用户消息到历史
         self._messages.append({

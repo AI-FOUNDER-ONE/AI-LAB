@@ -119,6 +119,7 @@ class DesignerAgent(BaseAgent):
                     self._client = OpenAI(
                         api_key=api_key,
                         base_url="https://api.deepseek.com",
+                        max_retries=5,
                     )
                 else:
                     raise ValueError("DEEPSEEK_API_KEY 未配置")

@@ -143,7 +143,7 @@ class ArchAgent(BaseAgent):
                     from openai import OpenAI
                     api_key = API_KEYS.get("openai", "")
                     if api_key:
-                        self._client = OpenAI(api_key=api_key)
+                        self._client = OpenAI(api_key=api_key, max_retries=5)
                     else:
                         raise ValueError("OPENAI_API_KEY 未配置")
                 except ImportError:
@@ -157,6 +157,7 @@ class ArchAgent(BaseAgent):
                         self._client = OpenAI(
                             api_key=api_key,
                             base_url="https://api.x.ai/v1",
+                            max_retries=5,
                         )
                     else:
                         raise ValueError("XAI_API_KEY 未配置")
@@ -171,6 +172,7 @@ class ArchAgent(BaseAgent):
                         self._client = OpenAI(
                             api_key=api_key,
                             base_url="https://hiapi.online/v1",
+                            max_retries=5,
                         )
                     else:
                         raise ValueError("HIAPI_API_KEY 未配置")
@@ -187,6 +189,7 @@ class ArchAgent(BaseAgent):
                         self._client = OpenAI(
                             api_key=api_key,
                             base_url=base_url,
+                            max_retries=5,
                         )
                     else:
                         raise ValueError("VOLCENGINE_API_KEY 未配置")

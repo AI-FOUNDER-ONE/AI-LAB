@@ -128,7 +128,10 @@ class CoderAgent(BaseAgent):
                 elif provider == "claude_custom":
                     api_key = API_KEYS.get("claude_custom", "")
                     # 用户提供的 Endpoint
-                    base_url = "https://yunyi.rdzhvip.com/claude"
+                    base_url = self.model_config.get("base_url", "https://yunyi.rdzhvip.com/claude")
+                elif provider == "bigmodel":
+                    api_key = API_KEYS.get("bigmodel", "")
+                    base_url = self.model_config.get("base_url", "https://open.bigmodel.cn/api/coding/paas/v4")
                 else:
                     raise ValueError(f"CoderAgent 不支持的 Provider: {provider}")
 
@@ -136,6 +139,7 @@ class CoderAgent(BaseAgent):
                     self._client = OpenAI(
                         api_key=api_key,
                         base_url=base_url,
+                        max_retries=5,
                     )
                 else:
                     raise ValueError(f"{provider.upper()}_API_KEY 未配置")

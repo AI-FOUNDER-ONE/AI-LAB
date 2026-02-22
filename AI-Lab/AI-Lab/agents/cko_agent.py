@@ -152,6 +152,7 @@ class CKOAgent(BaseAgent):
                         self._client = OpenAI(
                             api_key=api_key,
                             base_url="https://api.deepseek.com",
+                            max_retries=5,
                         )
                     else:
                         raise ValueError("DEEPSEEK_API_KEY 未配置")
@@ -167,6 +168,7 @@ class CKOAgent(BaseAgent):
                         self._client = OpenAI(
                             api_key=api_key,
                             base_url=base_url,
+                            max_retries=5,
                         )
                     else:
                         print("Warning: NOVAI_API_KEY not found.")
@@ -192,6 +194,7 @@ class CKOAgent(BaseAgent):
                         self._client = OpenAI(
                             api_key=api_key,
                             base_url="https://hiapi.online/v1",
+                            max_retries=5,
                         )
                     else:
                         raise ValueError("HIAPI_API_KEY (used for CKO) 未配置")
@@ -294,7 +297,7 @@ class CKOAgent(BaseAgent):
             )
             return response.choices[0].message.content
 
-        elif provider in ("deepseek", "hiapi"):
+        elif provider in ("deepseek", "hiapi", "novai"):
             try:
                 print(f"DEBUG: CKOAgent calling {provider} with model {self.model_config['model']}")
                 # 准备 API 调用参数

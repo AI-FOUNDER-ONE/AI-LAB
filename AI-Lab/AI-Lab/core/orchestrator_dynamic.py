@@ -22,7 +22,7 @@ from agents.pm_agent import PMAgent
 from agents.arch_agent import ArchAgent
 from agents.designer_agent import DesignerAgent
 from agents.coder_agent import CoderAgent
-from agents.tester_agent import TesterAgent
+from agents.validator_agent import ValidatorAgent
 from agents.base_agent import BaseAgent
 
 from core.state_controller import StateController
@@ -67,6 +67,35 @@ class ConversationContext:
             lines.append(f"{msg.role}: {msg.content}")
         return "\n".join(lines)
 
+    def get_incremental_context(self, exclude_role="PM", limit=10) -> str:
+        """Get context excluding recent messages from a specific role to avoid repetition."""
+        if not self.history:
+            return ""
+
+        # Find the last message from the excluded role
+        last_exclude_index = -1
+        for i, msg in enumerate(reversed(self.history)):
+            if msg.role == exclude_role:
+                last_exclude_index = len(self.history) - 1 - i
+                break
+
+        # If no excluded role found or it's the last message, return recent history
+        if last_exclude_index == -1 or last_exclude_index >= len(self.history) - 1:
+            return self.get_recent_history(limit)
+
+        # Get messages after the last excluded role message
+        start_idx = last_exclude_index + 1
+        recent_msgs = self.history[start_idx:]
+
+        # Limit the number of messages
+        if len(recent_msgs) > limit:
+            recent_msgs = recent_msgs[-limit:]
+
+        lines = []
+        for msg in recent_msgs:
+            lines.append(f"{msg.role}: {msg.content}")
+        return "\n".join(lines)
+
     def get_last_message(self) -> Optional[Message]:
         return self.history[-1] if self.history else None
 
@@ -79,7 +108,7 @@ class InteractionManager:
     
     def __init__(self, context: ConversationContext):
         self.context = context
-        self.participants = ["CKO", "PM", "Arch", "Designer", "Coder", "Tester"]
+        self.participants = ["CKO", "PM", "Arch", "Designer", "Coder", "Validator"]
 
     def decide_next_speaker(self, current_stage: str) -> str:
         """Analyze history and pick the next speaker."""
@@ -87,20 +116,45 @@ class InteractionManager:
         if not last_msg:
             return "PM" # Default starter
 
-        # 1. Direct Mention Priority (@Coder)
+        # 0. Anti-repetition: Prevent PM from speaking too frequently
+        if last_msg and last_msg.role == "PM":
+            # Check last 5 messages for PM frequency
+            recent_msgs = self.context.history[-5:] if len(self.context.history) >= 5 else self.context.history
+            pm_count = sum(1 for msg in recent_msgs if msg.role == "PM")
+            if pm_count >= 3:  # PM has spoken too much recently
+                # Force another role to speak based on current stage
+                if current_stage == AppState.DEBATE:
+                    # Check who hasn't spoken recently
+                    recent_roles = [msg.role for msg in recent_msgs]
+                    for role in ["Arch", "Designer", "CKO"]:
+                        if role not in recent_roles:
+                            return role
+                    # Fallback to Arch
+                    return "Arch"
+                elif current_stage == AppState.PRODUCTION:
+                    return "Coder" if "Coder" not in [msg.role for msg in recent_msgs[-2:]] else "Validator"
+
+        # 1. Direct Mention Priority (@Role) - ANY role can mention another to hand off
+        # Highest priority: If the last message explicitly mentions someone, they are next.
         if last_msg.mentions:
-            target = last_msg.mentions[0]
-            for p in self.participants:
-                if p.lower() in target.lower():
-                    return p
-        
+            for mention in last_msg.mentions:
+                # Find matching participant
+                for p in self.participants:
+                    if p.lower() == mention.lower():
+                        # Anti-ping-pong: do not hand off to same person who just spoke
+                        if p != last_msg.role:
+                            print(f"[InteractionManager] Route override: {last_msg.role} explicitly called @{p}")
+                            return p
+
         # 2. Stage-Specific Routing Logic
         if current_stage == AppState.GROUNDING:
             # In Grounding, if Commander just spoke, it's ALWAYS CKO's turn
             if last_msg.role == "Commander":
                 return "CKO"
-            # If CKO just spoke, wait for Commander or PM to confirm
-            return "PM"
+            if last_msg.role == "CKO":
+                return "PM"
+            # If PM just spoke, wait for Commander to reply.
+            return None
 
         # 3. User Command Override (NLP-inspired keywords)
         if last_msg.role == "Commander":
@@ -112,7 +166,7 @@ class InteractionManager:
             if "plan" in txt or "task" in txt or "schedule" in txt:
                 return "PM"
             if "test" in txt or "verify" in txt:
-                return "Tester"
+                return "Validator"
             # Default fallback for Commander in other phases
             return "PM"
 
@@ -123,7 +177,7 @@ class InteractionManager:
             if task_type == "RESEARCH":
                 if last_msg.role == "PM": return "CKO"
                 if last_msg.role == "CKO": return "Arch"
-                if last_msg.role == "Arch": return "Tester"
+                if last_msg.role == "Arch": return "Validator"
                 return "PM"
             elif task_type == "DESIGN":
                 if last_msg.role == "PM": return "Designer"
@@ -138,16 +192,18 @@ class InteractionManager:
             
         elif current_stage == AppState.PRODUCTION:
             if last_msg.role == "PM": return "Coder"
-            if last_msg.role == "Coder": return "Tester"
-            if last_msg.role == "Tester":
+            if last_msg.role == "Coder": return "Validator"
+            if last_msg.role == "Validator":
                  if "FAIL" in last_msg.content or "❌" in last_msg.content:
                      return "Coder"
                  else:
                      return "PM"
             return "PM"
 
-        return "PM"
+        if last_msg.role == "PM":
+            return None
 
+        return "PM"
 # ==============================================================================
 # 3. Orchestrator Implementation
 # ==============================================================================
@@ -182,7 +238,8 @@ class OrchestratorDynamic(QObject):
     workflow_completed = pyqtSignal()
     debate_round_info = pyqtSignal(int, int)
     agent_typing = pyqtSignal(str, bool)
-    
+    agent_stream_chunk = pyqtSignal(str, str)   # (角色, 文本片段)
+
     # Internal Signals for Event Loop
     _next_turn_ready = pyqtSignal()
 
@@ -201,18 +258,21 @@ class OrchestratorDynamic(QObject):
         self.arch = ArchAgent(self)
         self.designer = DesignerAgent(self)
         self.coder = CoderAgent(self)
-        self.tester = TesterAgent(self)
+        self.validator = ValidatorAgent(self)
         
         self.agents_map = {
             "CKO": self.cko, "PM": self.pm, "Arch": self.arch,
-            "Designer": self.designer, "Coder": self.coder, "Tester": self.tester
+            "Designer": self.designer, "Coder": self.coder, "Validator": self.validator
         }
 
         # 3. Wiring
         for role, agent in self.agents_map.items():
-            agent.typing_started.connect(lambda r=role: self.agent_typing.emit(r, True))
-            agent.typing_finished.connect(lambda r=role: self.agent_typing.emit(r, False))
-        
+            # agent emits (role) as first arg, map to (role, bool)
+            agent.typing_started.connect(lambda emitted_role: self.agent_typing.emit(emitted_role, True))
+            agent.typing_finished.connect(lambda emitted_role: self.agent_typing.emit(emitted_role, False))
+            # agent emits (role, chunk), pass through directly
+            agent.stream_chunk.connect(self.agent_stream_chunk.emit)
+
         # Forward state signals
         self.state_ctrl.state_changed.connect(self.state_changed.emit)
         
@@ -237,6 +297,19 @@ class OrchestratorDynamic(QObject):
         # 3. Trigger Event Loop
         self._next_turn_ready.emit()
 
+    def new_session(self):
+        """Reset the orchestrator for a new session."""
+        print("[OrchestratorV2] Starting new session...")
+        self.state_ctrl.reset()  # Reset to IDLE
+        self.ctx = ConversationContext() # Clear context
+        self.router = InteractionManager(self.ctx) # Re-bind router to new context
+        self.session_store.create_session(user_intent="New Session") # Create new log
+        self._turn_count = 0
+        if self._active_worker:
+            self._active_worker.quit()
+        # Notify UI to clear
+        self.agent_response.emit("System", "Session Reset. Ready for new commands.")
+
     def send_to_cko(self, message: str):
         """Legacy entry for Bridge Panel (Grounding)"""
         print(f"DEBUG: Orchestrator.send_to_cko called with: {message[:30]}...")
@@ -250,7 +323,13 @@ class OrchestratorDynamic(QObject):
         # For hybrid V2, we can just treat it as a Commander message
         # and let the Router send it to CKO if Stage=Grounding.
         # However, to be safe and support legacy Bridge flow:
-        self.inject_user_message(message) 
+        self.inject_user_message(message)
+
+    def handle_user_intervention(self, message: str):
+        """处理用户从 War Room 面板发起的干预指令"""
+        print(f"DEBUG: User intervention received: {message[:30]}...")
+        # 将用户干预作为 Commander 消息注入
+        self.inject_user_message(message)
 
     def confirm_project(self):
         """Legacy: User clicks Confirm in Bridge"""
@@ -287,7 +366,7 @@ class OrchestratorDynamic(QObject):
         self.agent_response.emit("System", sys_msg)
         
         # Trigger loop to start PM
-        self._next_turn_ready.emit()
+        QTimer.singleShot(1500, self._next_turn_ready.emit)
 
     # --------------------------------------------------------------------------
     # Event Loop Processing
@@ -296,7 +375,7 @@ class OrchestratorDynamic(QObject):
     def _process_next_turn(self):
         """The Main Brain: Decides who speaks and executes it."""
         current_state = self.state_ctrl.current_state
-        if current_state == AppState.IDLE:
+        if current_state in (AppState.IDLE, AppState.COMPLETED):
             return
 
         # 1. Router Decision
@@ -310,50 +389,76 @@ class OrchestratorDynamic(QObject):
              # unless it's a multi-part message? Let's strictly enforce turn-taking for now.
              pass
              
-        # 3. Special Handling: PM Decision Parsing (Structured System Commands)
+        # 3. Special Handling: PM Decision Parsing (Structured System Commands & NLP Cues)
         if last_msg and last_msg.role == "PM":
             content = last_msg.content
-            # Match structured system command: <SYS_CMD:APPROVE> or legacy "APPROVED"
-            if (re.search(r'<SYS_CMD:(APPROVE|APPROVED)>', content, re.IGNORECASE) or "APPROVED" in content) and current_state == AppState.DEBATE:
+            # Match structured system command: <SYS_CMD:APPROVE> or legacy "APPROVED", plus Grok NLP cues like NEXT_SPEAKER: Coder
+            approved = re.search(r'<SYS_CMD:(APPROVE|APPROVED)>', content, re.IGNORECASE) or \
+                       re.search(r'DECISION:\s*APPROVED', content, re.IGNORECASE) or \
+                       "APPROVED" in content or \
+                       re.search(r'NEXT_SPEAKER:\s*Coder', content, re.IGNORECASE)
+
+            if approved and current_state == AppState.DEBATE:
                 self.state_ctrl.transition_to(AppState.PRODUCTION)
                 self.agent_response.emit("System", f"PM Approved Plan. Moving to PRODUCTION ({self.ctx.task_type}).")
                 # Trigger initial coder kickoff by adding a system nudge
                 self.ctx.add_message("System", f"Phase changed to PRODUCTION. Team, please execute the {self.ctx.task_type} plan.")
-                self._next_turn_ready.emit()
+                QTimer.singleShot(1500, self._next_turn_ready.emit)
                 return
 
-        # 4. Delivery Handling (Structured System Commands)
+        # 4. Delivery Handling (Structured System Commands & NLP Cues)
         if last_msg and last_msg.role == "PM":
             content = last_msg.content
-            # Match structured system command: <SYS_CMD:DELIVER> or legacy "DELIVER"
-            if (re.search(r'<SYS_CMD:(DELIVER)>', content, re.IGNORECASE) or "DELIVER" in content) and current_state == AppState.VERIFICATION:
+            # Match structured system command: <SYS_CMD:DELIVER> or legacy "DELIVER", plus Grok NLP cues like NEXT_SPEAKER: Validator or 终局圆满
+            delivered = re.search(r'<SYS_CMD:(DELIVER)>', content, re.IGNORECASE) or \
+                        "DELIVER" in content or \
+                        "测试终局发布" in content or \
+                        "圆满终局" in content or \
+                        "封神终局" in content or \
+                        re.search(r'NEXT_SPEAKER:\s*Validator', content, re.IGNORECASE)
+
+            if delivered and current_state in [AppState.PRODUCTION, AppState.VERIFICATION]:
                 self._start_delivery()
                 return
 
         # 4. Execute
+        if not next_role:
+            print(f"[OrchestratorV2] 暂停自动流转，等待外部输入 (Role={next_role})")
+            return
+            
         agent = self.agents_map.get(next_role)
         if not agent:
             print(f"Error: Unknown role {next_role}")
             return
             
-        # 5. Check if we should wait for user? 
+        # 5. Check if we should wait for user?
         # For V2, we let the loop run until it stabilizes or hits max turns.
         
         self._run_agent(agent)
 
     def _run_agent(self, agent):
         # Prepare Prompt with Context (The "Dynamic" part)
-        recent_history = self.ctx.get_recent_history(limit=10)
-        
+        # Use incremental context for PM to avoid repetition
+        if agent.role == "PM":
+            recent_history = self.ctx.get_incremental_context(exclude_role="PM", limit=10)
+            if not recent_history.strip():
+                # Fallback to recent history if no incremental context
+                recent_history = self.ctx.get_recent_history(limit=10)
+        else:
+            recent_history = self.ctx.get_recent_history(limit=10)
+
         # Inject "Awareness"
         prompt = (
-            f"You are {agent.role} in a War Room debate.\n"
-            f"Current Phase: {self.state_ctrl.current_state}\n"
-            f"Review the recent history and respond to the last speaker or the Commander.\n"
-            f"If you need to address someone, use @Role.\n"
-            f"If consensus is reached (or job done), indicate it.\n\n"
-            f"--- History ---\n{recent_history}\n\n"
-            f"Your response:"
+            f"你是 War Room 讨论组中的 {agent.role}。\n"
+            f"当前开发阶段: {self.state_ctrl.current_state}\n"
+            f"【核心纪律要求】:\n"
+            f"1. 请务必使用流利、自然的中文回复，切勿使用机器翻译腔。\n"
+            f"2. 绝对禁止互相吹捧、客套废话或无意义的认同（如'你说的很对'、'非常赞同'等）。\n"
+            f"3. 你的发言必须直奔主题，只输出干货、代码、实质性建议或决策。\n"
+            f"4. 如果你需要向特定的人提问、交接任务或交互，必须使用 @角色名 (例如 @PM 或 @Coder) 来移交话筒。\n"
+            f"5. 如果达成共识或你的任务已完成，请清楚地表达出来。\n\n"
+            f"--- 历史对话 ---\n{recent_history}\n\n"
+            f"你的回复:"
         )
 
         # Worker Thread
@@ -366,42 +471,186 @@ class OrchestratorDynamic(QObject):
         worker.start()
 
     def _on_agent_finished(self, role: str, content: str):
+        # 0. 拦截并处理工具调用结果，防止原始 JSON 暴露在 UI
+        if content.startswith("__TOOL_RESULT__:"):
+            try:
+                import json
+                tool_data = json.loads(content[len("__TOOL_RESULT__:") :])
+                content = tool_data.get("content", "").strip()
+                # 如果只有工具调用而没有实质文本，给予默认提示或略过
+                if not content:
+                    content = "【已执行内部工具调用】"
+            except Exception as e:
+                print(f"[OrchestratorV2] 解析工具调用结果时出错: {e}")
+
+        # 0. Real-time repetition detection for PM
+        if role == "PM":
+            original_length = len(content)
+            content = self._detect_and_handle_pm_repetition(content)
+            if len(content) != original_length:
+                print(f"[重复处理] PM回复已精简: {original_length} → {len(content)} 字符")
+
         # 1. Update State
         self.ctx.add_message(role, content)
         self.session_store.append_meeting_log(role, content)
-        
+
         # 2. Update UI
         self.agent_response.emit(role, content)
 
         # 3. Special Handling (Code Extraction)
         if role == "Coder":
             self._handle_code_extraction(content)
-        
+
         # 4. Continue Loop
         # Check constraints (max turns?)
         self._turn_count += 1
-        if self._turn_count > 50: # Safety break
-            self.agent_response.emit("System", "Max turns reached. Pausing.")
-            return 
-            
+        # if self._turn_count > 50: # Safety break
+        #     self.agent_response.emit("System", "Max turns reached. Pausing.")
+        #     return
+
         # Recursive Step (Async via Signal to avoid stack depth)
+        QTimer.singleShot(1500, self._next_turn_ready.emit)
+
+    def _calculate_text_similarity(self, text1: str, text2: str) -> float:
+        """计算两个文本的相似度（基于Jaccard相似度）
+
+        Args:
+            text1: 第一个文本
+            text2: 第二个文本
+
+        Returns:
+            相似度分数 0.0-1.0
+        """
+        # 简单实现：基于词集的Jaccard相似度
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+
+        if not words1 and not words2:
+            return 1.0
+        if not words1 or not words2:
+            return 0.0
+
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        return len(intersection) / len(union)
+
+    def _detect_and_handle_pm_repetition(self, content: str) -> str:
+        """检测并处理PM回复的重复内容
+
+        Args:
+            content: PM的回复内容
+
+        Returns:
+            处理后的内容（如果重复则精简）
+        """
+        # 获取最近的PM回复（排除当前）
+        pm_messages = []
+        for msg in reversed(self.ctx.history[:-1]):  # 排除当前消息（尚未添加）
+            if msg.role == "PM":
+                pm_messages.append(msg.content)
+                if len(pm_messages) >= 2:  # 检查最近2条PM回复
+                    break
+
+        if not pm_messages:
+            return content
+
+        # 计算与最近PM回复的最大相似度
+        max_similarity = 0.0
+        for pm_content in pm_messages:
+            similarity = self._calculate_text_similarity(content, pm_content)
+            max_similarity = max(max_similarity, similarity)
+
+        # 如果相似度超过阈值，精简回复
+        if max_similarity > 0.6:  # 60%相似度阈值
+            print(f"[重复检测] PM回复相似度{max_similarity:.2f}，已标记")
+            # 精简策略：保留第一段或前100字符
+            lines = content.split('\n')
+            if len(lines) > 1:
+                # 尝试提取核心部分（第一段）
+                simplified = lines[0].strip()
+                if len(simplified) < 20:  # 太短则保留前两行
+                    simplified = '\n'.join(lines[:2]).strip()
+                content = f"【精简版】{simplified}...（与之前回复相似度较高）"
+            else:
+                # 单行内容，截断
+                if len(content) > 100:
+                    content = f"【精简版】{content[:100]}...（与之前回复相似）"
+            return content
+
+        return content
+
+    def _handle_code_extraction(self, content: str):
+        """处理代码提取逻辑（从 Coder 回复中提取代码块）
+
+        Args:
+            content: Coder 回复的完整内容
+        """
+        import os
+        import re
+        import datetime
+
+        try:
+            # 1. 更新会话中的 final_code
+            self.session_store.update_session(final_code=content)
+
+            # 2. 尝试正则提取代码
+            match = re.search(r"```([a-zA-Z]*)\n(.*?)```", content, re.DOTALL)
+            if match:
+                lang_tag = match.group(1).strip().lower()
+                pure_code = match.group(2)
+
+                # 3. 动态文件后缀推导
+                EXTENSION_MAP = {
+                    "python": ".py", "py": ".py",
+                    "javascript": ".js", "js": ".js",
+                    "typescript": ".ts", "ts": ".ts",
+                    "cpp": ".cpp", "c++": ".cpp",
+                    "c": ".c", "java": ".java",
+                    "html": ".html", "css": ".css",
+                    "json": ".json", "yaml": ".yaml", "yml": ".yml",
+                    "markdown": ".md", "md": ".md",
+                    "bash": ".sh", "sh": ".sh",
+                    "sql": ".sql"
+                }
+                ext = EXTENSION_MAP.get(lang_tag, ".py") # 如果未识别，默认 .py
+
+                # 4. 工作区目录初始化
+                workspace_dir = os.path.join("data", "workspace")
+                os.makedirs(workspace_dir, exist_ok=True)
+
+                # 5. 安全写入与命名
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"generated_{timestamp}{ext}"
+                file_path = os.path.abspath(os.path.join(workspace_dir, filename))
+
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(pure_code)
+
+                # 6. 系统消息广播
+                print(f"[Orchestrator] 成功提取代码并保存: {file_path}")
+                self.agent_response.emit("System", f"💾 最终代码已保存至: {file_path}")
+            else:
+                print("[Orchestrator] 未找到标准 Markdown 代码块，略过自动保存。")
+        except Exception as e:
+            print(f"[Orchestrator] 解析并保存代码文件时发生异常: {e}")
+
     def _start_delivery(self):
         """Phase 5: DELIVERY - Compile final pack"""
         if not self.state_ctrl.transition_to(AppState.DELIVERY):
             return
-            
+
         self.agent_response.emit("System", "🚀 Entering DELIVERY Phase. Compiling final project package...")
-        
+
         # Compile Summary
         summary = f"# Final Delivery Package\n\n## Project: {self.ctx.mission_protocol.get('project_title', 'Untitled')}\n"
         summary += f"## Domain: {self.ctx.task_type}\n\n"
         summary += "### Component Contributions:\n"
-        
-        for role in ["Arch", "Designer", "Coder", "Tester"]:
+
+        for role in ["Arch", "Designer", "Coder", "Validator"]:
             summary += f"- **{role}**: Completed {self.ctx.task_type} related tasks.\n"
-            
+
         summary += "\n### Final Assets:\n- Ready for deployment/presentation."
-        
+
         self.agent_response.emit("System", summary)
         QTimer.singleShot(2000, lambda: self.state_ctrl.transition_to(AppState.COMPLETED))
 

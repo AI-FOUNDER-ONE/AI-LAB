@@ -21,14 +21,14 @@ orchestrator.py - 编排引擎 (PM 主导模式)
 import traceback
 from typing import Optional
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, pyqtSignal, QTimer
 
 from agents.cko_agent import CKOAgent
 from agents.pm_agent import PMAgent
 from agents.arch_agent import ArchAgent
 from agents.designer_agent import DesignerAgent
 from agents.coder_agent import CoderAgent
-from agents.tester_agent import TesterAgent
+from agents.validator_agent import ValidatorAgent
 from core.state_controller import StateController
 from core.chat_history import ChatHistoryManager
 from core.session_store import SessionStore
@@ -198,13 +198,13 @@ class Orchestrator(QObject):
         self.arch = ArchAgent(self)
         self.designer = DesignerAgent(self)
         self.coder = CoderAgent(self)
-        self.tester = TesterAgent(self)
+        self.validator = ValidatorAgent(self)
         
         # ------ 连接 Agent 的输入状态信号 ------
-        for agent in [self.cko, self.pm, self.arch, self.designer, self.coder, self.tester]:
+        for agent in [self.cko, self.pm, self.arch, self.designer, self.coder, self.validator]:
             agent.typing_started.connect(lambda role, a=agent: self.agent_typing.emit(role, True))
             agent.typing_finished.connect(lambda role, a=agent: self.agent_typing.emit(role, False))
-            agent.stream_chunk.connect(lambda chunk, role=agent.role: self.agent_stream_chunk.emit(role, chunk))
+            agent.stream_chunk.connect(self.agent_stream_chunk.emit)
 
         # ------ 活跃的 Worker 线程列表 ------
         self._active_workers = []
@@ -345,13 +345,13 @@ class Orchestrator(QObject):
 
         # PM 解读完成 → 开始动态博弈循环
         self._debate_round = 0
-        self._run_moderator_loop()
+        QTimer.singleShot(1500, self._run_moderator_loop)
 
     def _run_moderator_loop(self):
         """进入/继续 PM 主持的博弈循环"""
         logger.debug(f"_run_moderator_loop entered. State={self.state_ctrl.current_state}, Round={self._debate_round}")
-        # 1. 状态检查：如果已停止 (IDLE)，则不再执行
-        if self.state_ctrl.current_state == AppState.IDLE:
+        # 1. 状态检查：如果已停止 (IDLE) 或完成 (COMPLETED)，则不再执行
+        if self.state_ctrl.current_state in (AppState.IDLE, AppState.COMPLETED):
             return
 
         # 2. 状态转换/检查
@@ -388,7 +388,7 @@ class Orchestrator(QObject):
     def _on_moderator_decision(self, role: str, content: str):
         """处理 PM 主持人的决策（支持工具调用和传统文本指令）"""
         # 状态检查
-        if self.state_ctrl.current_state == AppState.IDLE:
+        if self.state_ctrl.current_state in (AppState.IDLE, AppState.COMPLETED):
              return
 
         self.agent_response.emit(role, content)
@@ -418,7 +418,7 @@ class Orchestrator(QObject):
                             self._handle_delegate_to_role(role_name, tool_args.get("instruction", ""))
                         else:
                             self.agent_response.emit("系统", "⚠️ 工具调用失败：未指定角色名称")
-                            self._run_moderator_loop()
+                            QTimer.singleShot(1500, self._run_moderator_loop)
 
                     elif tool_name == "approve_solution":
                         reason = tool_args.get("reason", "")
@@ -478,7 +478,7 @@ class Orchestrator(QObject):
              # 如果 PM 没给指令（可能是纯点评），默认让 Designer 回应（通常是 Arch 发言后 PM 点评，然后 Designer 接话）
              # 或者再次询问 PM
              self.agent_response.emit("系统", "⚠️ PM 未给出明确指令，继续请求裁决...")
-             self._run_moderator_loop()
+             QTimer.singleShot(1500, self._run_moderator_loop)
 
     def _handle_delegate_to_role(self, role_name: str, instruction: str = ""):
         """处理委托发言权给指定角色"""
@@ -530,8 +530,8 @@ class Orchestrator(QObject):
     def _call_agent(self, agent):
         """调用指定 Agent 发言"""
         logger.debug(f"Orchestrator._call_agent called for {agent.role}")
-        if self.state_ctrl.current_state == AppState.IDLE:
-             logger.debug("Orchestrator state is IDLE, aborting call")
+        if self.state_ctrl.current_state in (AppState.IDLE, AppState.COMPLETED):
+             logger.debug("Orchestrator state is IDLE or COMPLETED, aborting call")
              return
 
         # 构建 prompt：包含最近的上下文
@@ -552,8 +552,8 @@ class Orchestrator(QObject):
     def _on_debate_agent_response(self, role: str, content: str):
         """Arch/Designer 发言完毕 -> 记录并交回主持棒"""
         logger.debug(f"Orchestrator received response from {role}")
-        if self.state_ctrl.current_state == AppState.IDLE:
-             logger.debug("State is IDLE, ignoring response")
+        if self.state_ctrl.current_state in (AppState.IDLE, AppState.COMPLETED):
+             logger.debug("State is IDLE or COMPLETED, ignoring response")
              return
 
         self.agent_response.emit(role, content)
@@ -561,7 +561,7 @@ class Orchestrator(QObject):
         
         # 话筒交回给 PM
         logger.debug("Passing control back to Moderator loop")
-        self._run_moderator_loop()
+        QTimer.singleShot(1500, self._run_moderator_loop)
 
     def _get_recent_debate_history(self, limit=5) -> str:
         """获取最近几条博弈记录用于构建 Prompt"""
@@ -644,6 +644,53 @@ class Orchestrator(QObject):
             # 2. 更新 Session
             self.session_store.update_session(final_code=content)
 
+            # 3. 自动落盘：拦截代码并提取保存
+            try:
+                import os
+                import re
+                import datetime
+
+                # 1. 工作区目录初始化
+                workspace_dir = os.path.join("data", "workspace")
+                os.makedirs(workspace_dir, exist_ok=True)
+
+                # 2. 正则提取代码
+                match = re.search(r"```([a-zA-Z]*)\n(.*?)```", content, re.DOTALL)
+                if match:
+                    lang_tag = match.group(1).strip().lower()
+                    pure_code = match.group(2)
+
+                    # 3. 动态文件后缀推导
+                    EXTENSION_MAP = {
+                        "python": ".py", "py": ".py",
+                        "javascript": ".js", "js": ".js",
+                        "typescript": ".ts", "ts": ".ts",
+                        "cpp": ".cpp", "c++": ".cpp",
+                        "c": ".c", "java": ".java",
+                        "html": ".html", "css": ".css",
+                        "json": ".json", "yaml": ".yaml", "yml": ".yml",
+                        "markdown": ".md", "md": ".md",
+                        "bash": ".sh", "sh": ".sh",
+                        "sql": ".sql"
+                    }
+                    ext = EXTENSION_MAP.get(lang_tag, ".py") # 如果未识别，默认 .py
+
+                    # 4. 安全写入与命名
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"generated_{timestamp}{ext}"
+                    file_path = os.path.abspath(os.path.join(workspace_dir, filename))
+
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(pure_code)
+
+                    # 5. 系统消息广播
+                    self.agent_response.emit("系统", f"💾 最终代码已保存至本地: {file_path}")
+                else:
+                    logger.warning("Coder 输出中未提取到 Markdown 代码块，略过自动保存。")
+            except Exception as e:
+                # 6. 异常容错
+                logger.error(f"解析并保存代码文件时发生异常: {e}")
+
             # 启动测试验证
             self._start_verification(content)
         except Exception as e:
@@ -673,12 +720,12 @@ class Orchestrator(QObject):
             f"请评估其逻辑合理性、完整性和可执行性，并输出《验证评估报告》。"
         )
 
-        worker = AgentWorker(self.tester, tester_msg, self)
-        worker.finished_with_result.connect(self._on_tester_response)
+        worker = AgentWorker(self.validator, tester_msg, self)
+        worker.finished_with_result.connect(self._on_validator_response)
         worker.error_occurred.connect(self._on_agent_error)
         self._start_worker(worker)
 
-    def _on_tester_response(self, role: str, content: str):
+    def _on_validator_response(self, role: str, content: str):
         """Validator 评估完毕 → 提交 CKO 审计"""
         try:
             # 1. 发射信号更新 UI
@@ -713,7 +760,7 @@ class Orchestrator(QObject):
             self.agent_response.emit("CKO", "✅ [Vision Keeper] 审计通过，准备交付 PM 验收。")
             
             # 获取 Validator 报告
-            validator_report = self._get_last_assistant_msg(self.tester)
+            validator_report = self._get_last_assistant_msg(self.validator)
             
             self.agent_response.emit("系统", "🔍 Validator 已提交评估报告，正在转交 PM 进行终审...")
             self._start_pm_final_audit(validator_report)

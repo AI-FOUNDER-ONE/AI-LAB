@@ -182,6 +182,7 @@ class PMAgent(BaseAgent):
                         self._client = OpenAI(
                             api_key=api_key,
                             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                            max_retries=5,
                         )
                     else:
                         raise ValueError("QWEN_API_KEY 未配置")
@@ -196,6 +197,7 @@ class PMAgent(BaseAgent):
                         self._client = OpenAI(
                             api_key=api_key,
                             base_url="https://api.x.ai/v1",
+                            max_retries=5,
                         )
                     else:
                         raise ValueError("XAI_API_KEY 未配置")
@@ -207,7 +209,7 @@ class PMAgent(BaseAgent):
                     from openai import OpenAI
                     api_key = API_KEYS.get("openai", "")
                     if api_key:
-                        self._client = OpenAI(api_key=api_key)
+                        self._client = OpenAI(api_key=api_key, max_retries=5)
                     else:
                         raise ValueError("OPENAI_API_KEY 未配置")
                 except ImportError:
