@@ -56,16 +56,17 @@ class ValidatorAgent(BaseAgent):
     支持 DeepSeek (默认) 或 Anthropic (Claude) 等模型。
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, tool_manager=None):
         # 从配置中动态加载模型参数
         from config import AGENT_MODELS
         model_config = AGENT_MODELS.get("Validator", {"provider": "deepseek", "model": "deepseek-chat"})
-        
+
         super().__init__(
             role="Validator",
             model_config=model_config,
             system_prompt=VALIDATOR_SYSTEM_PROMPT,
             parent=parent,
+            tool_manager=tool_manager,
         )
         self._client = None
 

@@ -274,10 +274,10 @@ class MainWindow(QMainWindow):
         # ============================================================
         #  CKO Agent 输入状态 → Bridge 面板
         # ============================================================
-        self.orchestrator.cko.typing_started.connect(
+        self.orchestrator.agents_map["CKO"].typing_started.connect(
             lambda: self.bridge_panel.set_ke_typing(True)
         )
-        self.orchestrator.cko.typing_finished.connect(
+        self.orchestrator.agents_map["CKO"].typing_finished.connect(
             lambda: self.bridge_panel.set_ke_typing(False)
         )
 
@@ -286,9 +286,9 @@ class MainWindow(QMainWindow):
         # ============================================================
         # Use a list of (proxy_agent, role_name) tuples for explicit mapping
         debate_agents = [
-            (self.orchestrator.pm, "PM"),
-            (self.orchestrator.arch, "Arch"),
-            (self.orchestrator.designer, "Designer")
+            (self.orchestrator.agents_map["PM"], "PM"),
+            (self.orchestrator.agents_map["Arch"], "Arch"),
+            (self.orchestrator.agents_map["Designer"], "Designer")
         ]
         
         for agent_proxy, role_id in debate_agents:
