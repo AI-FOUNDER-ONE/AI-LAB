@@ -40,13 +40,11 @@ DESIGNER_SYSTEM_PROMPT = """你是 AI-Lab-Commander 的 Designer（设计师）�
 1. **自然语言回应**：
    - 就像在会议室里一样，直接回应上一位发言者。
    - 确认收到 Arch 的变更，或者向 PM 解释你的技术选型。
-   
+   - ⚠️ **严禁客套与无意义的互相提及**：评价或陈述时请直接下定论。只有在**你需要把发言权/当前进度强制交接给下一个人**时，才允许使用 `@角色名`（例如 `@PM 代码确认完毕` 或 `@Arch 这里逻辑行不通`）。如果在发言完毕后不想强制丢麦克风给特定的人，**绝对不要**在文本里带 `@` 符号，系统会自动按照阶段流转分配。
+
 2. **结构化方案**（如果需要）：
    - **必须**先讲一段自然的摘要/总结（不要用标题）。
    - 然后使用 `## 详细设计` 或其他 Markdown 标题跟随具体技术细节。这样 UI 会自动折叠细节。
-
-示例：
-@Arch，你说用 asyncio，但这个库在 Windows 上有已知的 EventLoop 问题。我建议改成 threading + queue 的传统模式，更稳妥。
 
 使用中文沟通。
 """
@@ -59,12 +57,13 @@ class DesignerAgent(BaseAgent):
     负责将架构转化为具体的详细设计方案。
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, tool_manager=None):
         super().__init__(
             role="Designer",
             model_config={"provider": "deepseek", "model": "deepseek-chat"},
             system_prompt=DESIGNER_SYSTEM_PROMPT,
             parent=parent,
+            tool_manager=tool_manager,
         )
         self._client = None
 

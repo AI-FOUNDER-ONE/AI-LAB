@@ -146,6 +146,19 @@ class InteractionManager:
                             print(f"[InteractionManager] Route override: {last_msg.role} explicitly called @{p}")
                             return p
 
+        # 1.5 Explicit Next Speaker Directive (e.g. NEXT_SPEAKER: Arch)
+        # Check text body for routing keyword because @mentions are prohibited for PM style
+        if last_msg:
+            import re
+            match = re.search(r'NEXT_SPEAKER:\s*([A-Za-z]+)', last_msg.content, re.IGNORECASE)
+            if match:
+                target = match.group(1).strip()
+                for p in self.participants:
+                    if p.lower() == target.lower():
+                        if p != last_msg.role:
+                            print(f"[InteractionManager] Route override: {last_msg.role} directed next speaker to {p}")
+                            return p
+
         # 2. Stage-Specific Routing Logic
         if current_stage == AppState.GROUNDING:
             # In Grounding, if Commander just spoke, it's ALWAYS CKO's turn
@@ -455,7 +468,8 @@ class OrchestratorDynamic(QObject):
             f"1. 请务必使用流利、自然的中文回复，切勿使用机器翻译腔。\n"
             f"2. 绝对禁止互相吹捧、客套废话或无意义的认同（如'你说的很对'、'非常赞同'等）。\n"
             f"3. 你的发言必须直奔主题，只输出干货、代码、实质性建议或决策。\n"
-            f"4. 如果你需要向特定的人提问、交接任务或交互，必须使用 @角色名 (例如 @PM 或 @Coder) 来移交话筒。\n"
+            f"4. ⚠️ 除非你真的需要强制将**下一个发言权**精准移交给某个人，否则**绝对不要**随意使用 `@角色名`（严禁客套）。系统会自动分配下一轮发言。\n"
+            f"   (PM可使用 `NEXT_SPEAKER: 角色名`，其他角色如确需交接请在句末使用 `@角色名`)。\n"
             f"5. 如果达成共识或你的任务已完成，请清楚地表达出来。\n\n"
             f"--- 历史对话 ---\n{recent_history}\n\n"
             f"你的回复:"
@@ -594,41 +608,61 @@ class OrchestratorDynamic(QObject):
             self.session_store.update_session(final_code=content)
 
             # 2. 尝试正则提取代码
-            match = re.search(r"```([a-zA-Z]*)\n(.*?)```", content, re.DOTALL)
-            if match:
-                lang_tag = match.group(1).strip().lower()
-                pure_code = match.group(2)
-
-                # 3. 动态文件后缀推导
-                EXTENSION_MAP = {
-                    "python": ".py", "py": ".py",
-                    "javascript": ".js", "js": ".js",
-                    "typescript": ".ts", "ts": ".ts",
-                    "cpp": ".cpp", "c++": ".cpp",
-                    "c": ".c", "java": ".java",
-                    "html": ".html", "css": ".css",
-                    "json": ".json", "yaml": ".yaml", "yml": ".yml",
-                    "markdown": ".md", "md": ".md",
-                    "bash": ".sh", "sh": ".sh",
-                    "sql": ".sql"
-                }
-                ext = EXTENSION_MAP.get(lang_tag, ".py") # 如果未识别，默认 .py
-
+            matches = list(re.finditer(r"```([a-zA-Z]*)\n(.*?)```", content, re.DOTALL))
+            
+            if matches:
                 # 4. 工作区目录初始化
                 workspace_dir = os.path.join("data", "workspace")
                 os.makedirs(workspace_dir, exist_ok=True)
+                
+                saved_files = []
+                for i, match in enumerate(matches):
+                    lang_tag = match.group(1).strip().lower()
+                    pure_code = match.group(2)
 
-                # 5. 安全写入与命名
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"generated_{timestamp}{ext}"
-                file_path = os.path.abspath(os.path.join(workspace_dir, filename))
+                    # 尝试从代码文本第一行提取文件名
+                    filename = None
+                    lines = pure_code.split('\n')
+                    if lines:
+                        first_line = lines[0].strip()
+                        # 匹配 // filename: x.js 或 # filename: x.py 或 /* filename: x.css */ 或 <!-- filename: x.html -->
+                        name_match = re.search(r'(?://|#|/\*|<!--)\s*filename:\s*([^\s\*>]+)', first_line, re.IGNORECASE)
+                        if name_match:
+                            filename = name_match.group(1).strip()
+                            # （可选）从纯代码中移除文件名那一行
+                            pure_code = '\n'.join(lines[1:]).strip()
 
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(pure_code)
+                    if not filename:
+                        # 3. 动态文件后缀推导 fallback
+                        EXTENSION_MAP = {
+                            "python": ".py", "py": ".py",
+                            "javascript": ".js", "js": ".js",
+                            "typescript": ".ts", "ts": ".ts",
+                            "cpp": ".cpp", "c++": ".cpp",
+                            "c": ".c", "java": ".java",
+                            "html": ".html", "css": ".css",
+                            "json": ".json", "yaml": ".yaml", "yml": ".yml",
+                            "markdown": ".md", "md": ".md",
+                            "bash": ".sh", "sh": ".sh",
+                            "sql": ".sql"
+                        }
+                        ext = EXTENSION_MAP.get(lang_tag, ".py") # 如果未识别，默认 .py
+                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = f"generated_{timestamp}_{i}{ext}"
+
+                    # 5. 安全写入与命名
+                    # 确保子目录结构被创建
+                    file_path = os.path.abspath(os.path.join(workspace_dir, filename))
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(pure_code)
+                    saved_files.append(file_path)
 
                 # 6. 系统消息广播
-                print(f"[Orchestrator] 成功提取代码并保存: {file_path}")
-                self.agent_response.emit("System", f"💾 最终代码已保存至: {file_path}")
+                joined_paths = "\n".join(saved_files)
+                print(f"[Orchestrator] 成功提取代码并保存:\n{joined_paths}")
+                self.agent_response.emit("System", f"💾 最终代码已保存至:\n{joined_paths}")
             else:
                 print("[Orchestrator] 未找到标准 Markdown 代码块，略过自动保存。")
         except Exception as e:

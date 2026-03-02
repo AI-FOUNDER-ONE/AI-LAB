@@ -45,6 +45,7 @@ from config import APP_TITLE, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT
 from core.orchestrator import Orchestrator
 from core.logger import setup_logging, logger
 from core.orchestrator_dynamic import OrchestratorDynamic
+from core.unified_orchestrator import UnifiedOrchestrator
 from ui.bridge_panel import BridgePanel
 from ui.warroom_panel import WarRoomPanel
 from ui.execution_panel import ExecutionPanel
@@ -70,8 +71,8 @@ class MainWindow(QMainWindow):
         # 应用全局暗色主题样式
         self.setStyleSheet(get_main_stylesheet())
 
-        # ------ 创建动态编排引擎 ------
-        self.orchestrator = OrchestratorDynamic(self)
+        # ------ 创建统一编排引擎 ------
+        self.orchestrator = UnifiedOrchestrator(self)
 
         # ------ 创建 UI 面板 ------
         self.bridge_panel = BridgePanel(self)
@@ -222,7 +223,7 @@ class MainWindow(QMainWindow):
         #  Bridge → Orchestrator: 用户消息 → CrewAI
         # ============================================================
         self.bridge_panel.message_sent.connect(
-            self.orchestrator.start_mission
+            self.orchestrator.send_to_cko
         )
 
         # ============================================================
@@ -399,11 +400,11 @@ class MainWindow(QMainWindow):
             log_content = content.replace("<SYS_LOG:WARNING>", "").strip()
             self.execution_panel.append_log(log_content, level="warning")
 
-        # 7. 兼容旧版 Tester 表情符号检测（保留向后兼容）
-        if role == "Tester":
-            if "✅" in content or "测试通过" in content:
+        # 7. 兼容 Validator 表情符号检测
+        if role == "Validator":
+            if "✅" in content or "验证通过" in content or "测试通过" in content:
                 self.execution_panel.append_log(content, level="success")
-            elif "❌" in content or "测试失败" in content:
+            elif "❌" in content or "验证失败" in content or "测试失败" in content:
                 self.execution_panel.append_log(content, level="error")
             else:
                 self.execution_panel.append_log(content, level="info")
@@ -502,7 +503,7 @@ class MainWindow(QMainWindow):
             "<li>🏗️ Arch · 架构师 (Claude)</li>"
             "<li>🎨 Designer · 设计师 (DeepSeek)</li>"
             "<li>💻 Coder · 程序员 (GLM)</li>"
-            "<li>🧪 Tester · 测试员 (Claude)</li>"
+            "<li>🧪 Validator · 验证官 (DeepSeek)</li>"
             "</ul>"
         )
 

@@ -15,7 +15,7 @@ import re
 import time
 from typing import Type
 from pydantic import BaseModel, Field
-from crewai.tools import BaseTool
+from tools.base_tool import BaseTool
 
 
 class DocxGeneratorInput(BaseModel):

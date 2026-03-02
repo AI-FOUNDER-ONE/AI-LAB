@@ -40,12 +40,12 @@ except Exception as e:
     traceback.print_exc()
 
 try:
-    from agents.tester_agent import TesterAgent
-    print("  Initializing Tester Agent...")
-    tester = TesterAgent()
-    print("  Tester Agent Initialized.")
+    from agents.validator_agent import ValidatorAgent
+    print("  Initializing Validator Agent...")
+    validator = ValidatorAgent()
+    print("  Validator Agent Initialized.")
 except Exception as e:
-    print(f"  ALL_CAPS_ERROR: Tester Agent failed: {e}")
+    print(f"  ALL_CAPS_ERROR: Validator Agent failed: {e}")
     traceback.print_exc()
 
 print("\nDone.")

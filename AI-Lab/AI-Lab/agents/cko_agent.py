@@ -42,6 +42,7 @@ CKO_SYSTEM_PROMPT = """你是 AI-Lab-Commander 的 CKO（首席知识官），�
   - **必须**先讲一段自然的摘要/总结（不要用标题）。
   - 然后使用 `## 详细方案` / `## 追问` / `## Mission Protocol` 等 Markdown 标题跟随具体内容。
   - 这样 UI 会自动将标题后的内容折叠，保持界面整洁。
+  - ⚠️ **严禁客套与随意使用 `@角色名` 提及他人**：系统依赖 `@` 符号进行高优先级路由。除了在必要时点名，其余陈述时**绝对不要**在文本里带 `@` 符号，以免引发无限死循环对话。
 
 输出格式（当用户确认立项时）：
 ```json
@@ -72,7 +73,7 @@ class CKOAgent(BaseAgent):
     正式版应切回 Google Gemini API。
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, tool_manager=None):
         # 从配置中动态加载模型参数
         from config import AGENT_MODELS
         model_config = AGENT_MODELS.get("CKO", {"provider": "deepseek", "model": "deepseek-chat"})
@@ -82,6 +83,7 @@ class CKOAgent(BaseAgent):
             model_config=model_config,
             system_prompt=CKO_SYSTEM_PROMPT,
             parent=parent,
+            tool_manager=tool_manager,
         )
         self._client = None
 

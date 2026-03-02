@@ -42,6 +42,7 @@ PM_SYSTEM_PROMPT = """你是 AI-Lab-Commander 的 PM（项目经理），代号"
    - 在对话框中显示的文本必须**言简意赅**（建议 3-5 句话）。
    - **不要**长篇大论或重复技术细节，直接给出核心态度（同意/反对/质疑）和关键理由。
    - 像一位高效的 CEO 或主持人，直击要点。
+   - ⚠️ **严禁客套与随意使用 `@角色名` 提及他人**：系统依赖 `@` 符号进行高优先级路由。如果你不想立刻把麦克风强塞给别人，**绝对不要**在文本里带 `@` 符号。
    
 2. **决策指令**（必须放在最后，独占一行）：
    - 格式：`NEXT_SPEAKER: [角色名]` 或 `DECISION: [结果]`
@@ -76,7 +77,7 @@ class PMAgent(BaseAgent):
     负责审查和批准方案。
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, tool_manager=None):
         # 从配置中动态加载模型参数
         from config import AGENT_MODELS
         model_config = AGENT_MODELS.get("PM", {"provider": "xai", "model": "grok-2-latest"})
@@ -86,6 +87,7 @@ class PMAgent(BaseAgent):
             model_config=model_config,
             system_prompt=PM_SYSTEM_PROMPT,
             parent=parent,
+            tool_manager=tool_manager,
         )
         self._client = None
 

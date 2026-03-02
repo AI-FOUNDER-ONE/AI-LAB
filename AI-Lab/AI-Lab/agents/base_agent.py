@@ -7,10 +7,19 @@ base_agent.py - AI Agent 抽象基类
 """
 
 import traceback
+import time
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Dict, List, Any
 
 from PyQt6.QtCore import QObject, pyqtSignal
+
+# 尝试导入全局工具管理器相关类（可选）
+try:
+    from core.global_tool_manager import ToolPermission
+    GLOBAL_TOOLS_AVAILABLE = True
+except ImportError:
+    GLOBAL_TOOLS_AVAILABLE = False
+    ToolPermission = None
 
 
 class BaseAgent(QObject):
@@ -32,7 +41,8 @@ class BaseAgent(QObject):
     typing_started = pyqtSignal(str)         # (角色)
     typing_finished = pyqtSignal(str)        # (角色)
 
-    def __init__(self, role: str, model_config: dict, system_prompt: str = "", parent=None):
+    def __init__(self, role: str, model_config: dict, system_prompt: str = "", parent=None,
+                 tool_manager=None):
         """初始化 Agent
 
         Args:
@@ -40,6 +50,7 @@ class BaseAgent(QObject):
             model_config: 模型配置 {"provider": "...", "model": "..."}
             system_prompt: 系统提示词
             parent: Qt 父对象
+            tool_manager: 全局工具管理器实例（可选，默认使用独立工具管理）
         """
         super().__init__(parent)
         self.role = role
@@ -48,8 +59,10 @@ class BaseAgent(QObject):
         self._messages = []
         self._is_active = False
         self.max_history_length = 50  # 限制消息历史长度，防止内存增长
-        self.tools = []  # 注册的工具列表，用于原生 Function Calling
-        self._tools_schema_cache = None  # 工具JSON Schema缓存
+        self.tools = []  # 注册的工具列表，用于原生 Function Calling（兼容模式）
+        self._tools_schema_cache = None  # 工具JSON Schema缓存（兼容模式）
+        self._tool_manager = tool_manager  # 全局工具管理器（新架构）
+        self._use_global_tools = tool_manager is not None  # 是否使用全局工具管理器
 
         # 初始化消息历史
         if system_prompt:
@@ -107,11 +120,12 @@ class BaseAgent(QObject):
 
         # 计算与最近用户消息的最大相似度
         max_similarity = 0.0
-        for recent_content in recent_user_messages:
-            similarity = self._calculate_text_similarity(content, recent_content)
-            max_similarity = max(max_similarity, similarity)
+        # for recent_content in recent_user_messages:
+        #     similarity = self._calculate_text_similarity(content, recent_content)
+        #     max_similarity = max(max_similarity, similarity)
 
-        return max_similarity >= threshold
+        # 始终返回 False，禁用内置机械去重，完全交由模型本身和架构编排引擎处理。
+        return False
 
     def _handle_duplicate_request(self, content: str) -> str:
         """处理重复请求（子类可重写此方法）
@@ -125,14 +139,22 @@ class BaseAgent(QObject):
         # 默认行为：返回提示信息
         return f"【检测到相似请求】此请求与最近的历史消息相似，请基于之前的讨论继续。"
 
-    def register_tool(self, tool_callable, name=None, description=None, parameters_schema=None):
+    def register_tool(self, tool_callable, name=None, description=None, parameters_schema=None,
+                     tool_category=None, allowed_roles=None, permission_level=None):
         """注册一个工具，用于原生 Function Calling
+
+        支持两种模式：
+        1. 全局工具管理器模式：工具注册到全局管理器，支持权限控制和上下文感知
+        2. 本地兼容模式：工具注册到本地列表，保持向后兼容性
 
         Args:
             tool_callable: 可调用的 Python 函数
             name: 工具名称（默认为函数名）
             description: 工具描述
             parameters_schema: JSON Schema 格式的参数定义
+            tool_category: 工具类别（字符串，全局模式使用）
+            allowed_roles: 允许使用的角色列表（全局模式使用）
+            permission_level: 权限级别（全局模式使用）
         """
         import inspect
         import json
@@ -176,6 +198,64 @@ class BaseAgent(QObject):
                 "required": required if required else None
             }
 
+        # 如果是全局工具管理器模式，注册到全局管理器
+        if self._use_global_tools and self._tool_manager:
+            try:
+                from core.global_tool_manager import ToolCategory, ToolMetadata, ToolPermission
+
+                # 转换参数
+                category = None
+                if tool_category:
+                    # 尝试将字符串转换为ToolCategory枚举
+                    try:
+                        category = ToolCategory(tool_category)
+                    except ValueError:
+                        # 如果转换失败，尝试匹配
+                        for tc in ToolCategory:
+                            if tc.value == tool_category:
+                                category = tc
+                                break
+
+                # 创建元数据
+                metadata = ToolMetadata(
+                    name=tool_name,
+                    description=tool_desc,
+                    category=category or ToolCategory.UTILITY,
+                    version="1.0.0",
+                    author="system",
+                )
+
+                # 确定权限级别
+                if permission_level is None:
+                    perm_level = ToolPermission.LOCAL_EXECUTION
+                elif isinstance(permission_level, ToolPermission):
+                    perm_level = permission_level
+                elif isinstance(permission_level, str):
+                    # 尝试从字符串转换
+                    try:
+                        perm_level = ToolPermission(permission_level)
+                    except ValueError:
+                        perm_level = ToolPermission.LOCAL_EXECUTION
+                else:
+                    perm_level = ToolPermission.LOCAL_EXECUTION
+
+                # 注册到全局管理器
+                success = self._tool_manager.register_tool_with_metadata(
+                    tool_name, tool_callable, metadata, allowed_roles, perm_level
+                )
+
+                if success:
+                    print(f"[{self.role}] 工具 '{tool_name}' 已注册到全局工具管理器")
+                    return tool_name
+                else:
+                    print(f"[{self.role}] 警告: 工具 '{tool_name}' 全局注册失败，将使用本地模式")
+
+            except ImportError as e:
+                print(f"[{self.role}] 全局工具管理器不可用，使用本地模式: {e}")
+            except Exception as e:
+                print(f"[{self.role}] 全局工具注册异常，使用本地模式: {e}")
+
+        # 本地兼容模式（保持向后兼容性）
         tool_def = {
             "name": tool_name,
             "description": tool_desc,
@@ -185,6 +265,8 @@ class BaseAgent(QObject):
         self.tools.append(tool_def)
         # 清除工具schema缓存，因为工具列表已更改
         self._tools_schema_cache = None
+
+        print(f"[{self.role}] 工具 '{tool_name}' 已注册到本地列表（兼容模式）")
         return tool_name
 
     def update_system_prompt(self, new_prompt: str):
@@ -243,7 +325,26 @@ class BaseAgent(QObject):
         return self._is_active
 
     def _get_tools_schema(self):
-        """获取工具的JSON Schema（带缓存）"""
+        """获取工具的JSON Schema（带缓存）
+
+        支持两种模式：
+        1. 全局工具管理器模式：从全局管理器获取推荐的工具schema
+        2. 本地兼容模式：从本地工具列表获取schema
+        """
+        if self._use_global_tools and self._tool_manager:
+            # 全局模式：从工具管理器获取推荐的工具schema
+            try:
+                # 获取上下文感知的工具schema
+                tools_schema = self._tool_manager.get_tool_schema_for_agent(
+                    self.role,
+                    include_recommended_only=True
+                )
+                return tools_schema
+            except Exception as e:
+                print(f"[{self.role}] 从全局工具管理器获取schema失败，回退到本地模式: {e}")
+                self._use_global_tools = False  # 临时禁用全局模式
+
+        # 本地兼容模式（使用缓存）
         if self._tools_schema_cache is not None:
             return self._tools_schema_cache
 
@@ -260,6 +361,61 @@ class BaseAgent(QObject):
 
         self._tools_schema_cache = tools_schema
         return tools_schema
+
+    def _execute_tool(self, tool_name: str, args: Dict[str, Any]) -> str:
+        """执行工具（统一入口）
+
+        支持两种模式：
+        1. 全局工具管理器模式：通过安全沙箱执行，带权限检查
+        2. 本地兼容模式：通过超时控制执行本地工具
+
+        Args:
+            tool_name: 工具名称
+            args: 工具参数
+
+        Returns:
+            工具执行结果字符串
+
+        Raises:
+            RuntimeError: 工具执行失败
+            PermissionError: 权限不足
+        """
+        # 首先尝试全局工具管理器模式
+        if self._use_global_tools and self._tool_manager:
+            try:
+                # 使用全局工具管理器的安全执行
+                result = self._tool_manager.execute_tool_safely(self.role, tool_name, args)
+                if result.get("success"):
+                    # 记录工具使用（成功）
+                    try:
+                        self._tool_manager.record_tool_usage(tool_name, success=True)
+                    except:
+                        pass
+                    return result.get("result", "")
+                else:
+                    error_msg = result.get("error", "未知错误")
+                    # 记录工具使用（失败）
+                    try:
+                        self._tool_manager.record_tool_usage(tool_name, success=False)
+                    except:
+                        pass
+                    raise RuntimeError(f"工具执行失败: {error_msg}")
+            except Exception as e:
+                print(f"[{self.role}] 全局工具执行失败，尝试本地模式: {e}")
+                # 继续尝试本地模式
+
+        # 本地兼容模式：查找本地工具定义
+        tool_def = next((t for t in self.tools if t['name'] == tool_name), None)
+        if not tool_def:
+            raise RuntimeError(f"工具 '{tool_name}' 未找到")
+
+        # 使用带超时的本地执行
+        try:
+            result = self._execute_tool_with_timeout(tool_def, args)
+            # 本地模式无法记录使用统计
+            return result
+        except Exception as e:
+            raise RuntimeError(f"工具执行失败: {str(e)}")
 
     def _execute_tool_with_timeout(self, tool_def, args, timeout_seconds=30):
         """带超时控制的工具执行（使用 ThreadPoolExecutor 避免孤儿线程）
@@ -327,6 +483,7 @@ class BaseAgent(QObject):
 
         # 最大递归深度防止无限循环
         max_iterations = 10
+        all_executed_tool_calls = []
         for iteration in range(max_iterations):
             # 调用子类的 _call_api，传递工具 schema（如果支持）
             import tenacity
@@ -335,8 +492,8 @@ class BaseAgent(QObject):
                 print(f"[{self.role}] API Error/RateLimit. Retrying in {retry_state.next_action.sleep}s (Attempt {retry_state.attempt_number})...")
                 
             @tenacity.retry(
-                wait=tenacity.wait_exponential(multiplier=1.5, min=2, max=12),
-                stop=tenacity.stop_after_attempt(5),
+                wait=tenacity.wait_exponential(multiplier=2, min=3, max=30),
+                stop=tenacity.stop_after_attempt(8),
                 retry=tenacity.retry_if_exception_type(Exception),
                 before_sleep=log_retry
             )
@@ -356,6 +513,13 @@ class BaseAgent(QObject):
                 content = response.get('content', '')
                 tool_calls = response.get('tool_calls', [])
                 if tool_calls:
+                    # 先将触发工具调用的 assistant 消息追加到历史纪录，否则二次提交时会导致 API 报错 (BadRequestError)
+                    messages.append({
+                        "role": "assistant",
+                        "content": content,
+                        "tool_calls": tool_calls
+                    })
+                    
                     # 执行工具调用并将结果追加到消息历史
                     executed_tool_calls = []
                     for tool_call in tool_calls:
@@ -375,40 +539,24 @@ class BaseAgent(QObject):
                             args = json.loads(args_str) if isinstance(args_str, str) else args_str
                         except:
                             args = {}
-                        # 查找对应的工具定义
-                        tool_def = next((t for t in self.tools if t['name'] == func_name), None)
-                        if tool_def:
-                            try:
-                                # 执行工具（带超时控制）
-                                result = self._execute_tool_with_timeout(tool_def, args, timeout_seconds=30)
-                                # 将工具结果添加到消息历史
-                                messages.append({
-                                    "role": "tool",
-                                    "content": str(result),
-                                    "tool_call_id": tool_call.get('id', ''),
-                                    "name": func_name
-                                })
-                                # 记录执行成功的工具调用信息
-                                executed_tool_calls.append({
-                                    "name": func_name,
-                                    "args": args,
-                                    "result": str(result)
-                                })
-                            except Exception as e:
-                                error_msg = f"Error: {str(e)}"
-                                messages.append({
-                                    "role": "tool",
-                                    "content": error_msg,
-                                    "tool_call_id": tool_call.get('id', ''),
-                                    "name": func_name
-                                })
-                                executed_tool_calls.append({
-                                    "name": func_name,
-                                    "args": args,
-                                    "result": error_msg
-                                })
-                        else:
-                            error_msg = f"Tool '{func_name}' not found"
+                        # 执行工具（支持全局和本地模式）
+                        try:
+                            result = self._execute_tool(func_name, args)
+                            # 将工具结果添加到消息历史
+                            messages.append({
+                                "role": "tool",
+                                "content": str(result),
+                                "tool_call_id": tool_call.get('id', ''),
+                                "name": func_name
+                            })
+                            # 记录执行成功的工具调用信息
+                            executed_tool_calls.append({
+                                "name": func_name,
+                                "args": args,
+                                "result": str(result)
+                            })
+                        except Exception as e:
+                            error_msg = f"Error: {str(e)}"
                             messages.append({
                                 "role": "tool",
                                 "content": error_msg,
@@ -420,18 +568,18 @@ class BaseAgent(QObject):
                                 "args": args,
                                 "result": error_msg
                             })
-                    # 执行完所有工具调用后，立即返回，不再继续循环
-                    # 返回原始工具调用列表，调用方可以根据需要处理
-                    return {"content": content, "tool_calls": executed_tool_calls}
-                else:
-                    # 没有工具调用，返回字典
-                    return {"content": content, "tool_calls": []}
+                    
+                    # 汇集所有已经触发的工具记录
+                    all_executed_tool_calls.extend(executed_tool_calls)
+                    
+                    # 修改：不要立即 return。我们 continue 继续让大模型阅读上面注入的 role="tool" 结果，产出自然语言解释
+                    continue
             else:
                 # 返回字符串，无工具调用
-                return {"content": response, "tool_calls": []}
+                return {"content": response, "tool_calls": all_executed_tool_calls}
 
         # 达到最大迭代次数
-        return {"content": "Tool call loop exceeded maximum iterations.", "tool_calls": []}
+        return {"content": "Tool call loop exceeded maximum iterations.", "tool_calls": all_executed_tool_calls}
 
     def send_message(self, content: str) -> str:
         """发送消息并获取回复（同步方法，由 QThread 调用）
@@ -477,42 +625,48 @@ class BaseAgent(QObject):
             tool_calls = response_dict.get('tool_calls', [])
 
             # 检查是否有工具调用被执行（tool_calls 列表非空）
+            # 检查是否有使用任何工具调用
             if tool_calls:
-                # 有工具调用，构造一个特殊格式的字符串，包含工具调用信息
-                # 我们将工具调用结果编码为 JSON 字符串，以便调用方解析
+                # 有工具调用，构造一个特殊格式的字符串向外传递（用于Orchestrator拦截路由和发信号）
                 import json
                 tool_result = {
-                    "content": content_text,
-                    "tool_calls": tool_calls
+                    "content": content_text, # 包含大模型最终总结的自然语言
+                    "tool_calls": tool_calls # 包含全过程执行的所有工具调用记录
                 }
                 result_str = "__TOOL_RESULT__:" + json.dumps(tool_result, ensure_ascii=False)
-                # 注意：我们不在消息历史中添加这个特殊字符串，而是添加原始内容
+                
+                # 在消息历史中，我们只保存纯文本内容
                 if content_text:
                     self._messages.append({
                         "role": "assistant",
                         "content": content_text,
                     })
                 else:
-                    # 如果没有内容，可能只有工具调用，我们添加一个占位符
                     self._messages.append({
                         "role": "assistant",
-                        "content": "[工具调用执行完毕]",
+                        "content": "[已执行内部工具调用]",
                     })
             else:
-                # 没有工具调用，正常处理
+                # 没有用到工具调用，正常返回纯文本
                 result_str = content_text
                 self._messages.append({
                     "role": "assistant",
                     "content": content_text,
                 })
 
-            # 如果是工具调用结果，不进行流式传输
+            # 向主界面发信号渲染文本 (如果是 tool_result, orchestrator那头会单独拆解然后发信号，这里不再 emit_stream)
             if not result_str.startswith("__TOOL_RESULT__:"):
                 self._emit_stream_chunks(result_str)
             self.response_ready.emit(self.role, result_str)
             return result_str
 
         except Exception as e:
+            import tenacity
+            if isinstance(e, tenacity.RetryError):
+                try:
+                    e = e.last_attempt.exception()
+                except Exception:
+                    pass
             error_msg = f"[{self.role}] API 调用失败: {str(e)}\n{traceback.format_exc()}"
             self.error_occurred.emit(self.role, error_msg)
             return f"⚠️ 错误: {str(e)}"

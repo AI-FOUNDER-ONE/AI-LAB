@@ -31,9 +31,11 @@ CODER_SYSTEM_PROMPT = """你是 AI-Lab-Commander 的 Executor（执行官）。
 1. **绝对服从指令**：严格按照 Mission Protocol 和 PM/Arch/Designer 的要求执行。
 2. **格式规范**：输出内容必须结构清晰，符合 Markdown 标准。
 3. **专业性**：
-   - 如果是代码任务，遵循 Google 编程规范。
+   - ⚠️ **如果需要生成多个文件（如前端项目），必须将每个文件的代码独立放在一个 Markdown 代码块中，并在代码块的【第一行】添加注释说明文件名，例如 `// filename: src/main.ts` 或 `# filename: app.py`。**
+   - 🚫 **绝对禁止省略代码**：你必须输出完整可用、无需任何二次修改的代码。严禁使用 `...`、`// 其余代码保持不变`、`// 在此处添加逻辑` 等任何偷懒的占位符或伪代码。
    - 如果是文档任务，逻辑严密，论证充分。
    - 如果是设计任务，关注细节和可行性。
+4. **⚠️ 禁止擅自 `@` 任何人**：你只负责埋头写出完整代码。写完后可以直接陈述“代码已编写完毕”，但**严禁**在回复里加上 `@Designer`、`@PM` 等任何艾特符号！你的发言结束后，系统协调器会自动把代码传给 Validator 或 PM，无需你手动交接。
 
 不要自行猜测任务类型，请根据当前的 Prompt 指令行动。
 使用中文沟通。
@@ -47,7 +49,7 @@ class CoderAgent(BaseAgent):
     负责根据规范编写代码。
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, tool_manager=None):
         # 从配置中动态加载模型参数
         from config import AGENT_MODELS
         model_config = AGENT_MODELS.get("Coder", {"provider": "qwen", "model": "qwen-max"})
@@ -57,6 +59,7 @@ class CoderAgent(BaseAgent):
             model_config=model_config,
             system_prompt=CODER_SYSTEM_PROMPT,
             parent=parent,
+            tool_manager=tool_manager,
         )
         self._client = None
 
@@ -70,13 +73,8 @@ class CoderAgent(BaseAgent):
             return
 
         try:
-            # 1. CodeWriterTool - 代码写入工具
-            code_writer = CodeWriterTool()
-            def write_code(filename: str, code: str) -> str:
-                """将代码写入指定文件"""
-                return code_writer._run(filename=filename, code=code)
-            self.register_tool(write_code, name="code_writer",
-                             description="将代码写入指定文件。输入文件名和代码内容。")
+            # 1. 移除 CodeWriterTool，强制 Coder 输出 Markdown 代码由 Orchestrator 挂载提取
+            # [DEL] CodeWriterTool 已移除
 
             # 2. DocxParserTool - 文档解析工具
             docx_parser = DocxParserTool()
@@ -186,7 +184,7 @@ class CoderAgent(BaseAgent):
             "model": self.model_config["model"],
             "messages": messages,
             "temperature": 0.7,
-            "max_tokens": 4000,
+            "max_tokens": 8192,
         }
 
         # 如果提供了工具列表，添加到参数中

@@ -2,7 +2,7 @@
 execution_panel.py - 执行与测试实验室 (Execution Lab)
 =====================================================
 右侧面板：实时查看 Coder 编写的代码（语法高亮）
-以及 Tester 的运行日志（终端风格输出）。
+以及 Validator 的运行日志（终端风格输出）。
 """
 
 from PyQt6.QtWidgets import (

@@ -14,7 +14,7 @@ import ast
 import re
 from typing import Type, List, Dict
 from pydantic import BaseModel, Field
-from crewai.tools import BaseTool
+from tools.base_tool import BaseTool
 import subprocess
 import sys
 import os

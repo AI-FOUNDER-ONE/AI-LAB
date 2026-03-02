@@ -22,17 +22,18 @@ API_KEYS = {
     "claude_custom": os.getenv("CLAUDE_CUSTOM_API_KEY", ""),
     "volcengine": os.getenv("VOLCENGINE_API_KEY", ""),  # 火山引擎 Ark API
     "novai": os.getenv("NOVAI_API_KEY", ""),            # NovAI Gemini 代理
+    "bigmodel": os.getenv("BIGMODEL_API_KEY", ""),      # BigModel (ZhipuAI Coding)
 }
 
 # ---------- 角色 → 模型 映射 ----------
 AGENT_MODELS = {
-    "CKO":      {"provider": "novai",           "model": "gemini-3-pro-preview-thinking", "base_url": "https://once.novai.su/v1"},
+    "CKO":      {"provider": "novai",           "model": "gemini-3-pro-preview", "base_url": "https://once.novai.su/v1"},
     "QA":       {"provider": "deepseek",       "model": "deepseek-reasoner",        "base_url": "https://api.deepseek.com"},
-    "PM":       {"provider": "xai",            "model": "grok-4-0709",              "base_url": "https://api.x.ai/v1"},
+    "PM":       {"provider": "xai",            "model": "grok-4-1-fast-reasoning",  "base_url": "https://api.x.ai/v1"},
     "Arch":     {"provider": "volcengine",     "model": "doubao-seed-2-0-pro-260215", "base_url": "https://ark.cn-beijing.volces.com/api/v3"},
     "Designer": {"provider": "deepseek",       "model": "deepseek-reasoner",        "base_url": "https://api.deepseek.com"},
-    "Coder":    {"provider": "claude_custom",  "model": "claude-opus-4-6-20260205", "base_url": "https://yunyi.rdzhvip.com/claude", "api_type": "anthropic"},
-    "Tester":   {"provider": "deepseek",       "model": "deepseek-reasoner",        "base_url": "https://api.deepseek.com"},
+    "Coder":    {"provider": "bigmodel",       "model": "glm-5",                    "base_url": "https://open.bigmodel.cn/api/coding/paas/v4"},
+    "Validator":{"provider": "deepseek",       "model": "deepseek-reasoner",        "base_url": "https://api.deepseek.com"},
 }
 
 # ---------- 角色颜色与显示名 (Monochrome/Technical) ----------
@@ -43,7 +44,7 @@ AGENT_PROFILES = {
     "Arch":     {"name": "Arch",     "color": "#334155", "icon": "◆"}, # Slate-700
     "Designer": {"name": "Designer", "color": "#1E293B", "icon": "■"}, # Slate-800
     "Coder":    {"name": "Coder",    "color": "#0F172A", "icon": "●"}, # Slate-900
-    "Tester":   {"name": "Tester",   "color": "#94A3B8", "icon": "◈"}, # Slate-400
+    "Validator":{"name": "Validator","color": "#94A3B8", "icon": "◈"}, # Slate-400
     "Commander":{"name": "Commander","color": "#58A6FF", "icon": "👤"},
     "System":   {"name": "System",   "color": "#8B949E", "icon": "⚙️"},
 }
@@ -55,7 +56,7 @@ class AppState:
     GROUNDING    = "GROUNDING"      # CKO 需求打磨阶段
     DEBATE       = "DEBATE"         # PM/Arch/Designer 方案博弈阶段
     PRODUCTION   = "PRODUCTION"     # Coder 编码阶段
-    VERIFICATION = "VERIFICATION"   # Tester 验证阶段
+    VERIFICATION = "VERIFICATION"   # Validator 验证阶段
     DELIVERY     = "DELIVERY"       # 交付汇总阶段
     COMPLETED    = "COMPLETED"      # 任务完成
 
@@ -98,7 +99,7 @@ def validate_config():
         logger.warning("部分功能可能受限")
 
     # 检查必需的角色模型配置
-    required_roles = ["CKO", "QA", "PM", "Arch", "Designer", "Coder", "Tester"]
+    required_roles = ["CKO", "QA", "PM", "Arch", "Designer", "Coder", "Validator"]
     missing_roles = []
     for role in required_roles:
         if role not in AGENT_MODELS:

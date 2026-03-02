@@ -9,7 +9,6 @@ warroom_panel.py - 多路会议直播间 (The War Room)
   - 详细方案/审批内容: 缩略显示，点击按钮展开or折叠
   - 系统事件: 居中小标签
 """
-
 from PyQt6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel,
     QTextEdit, QSizePolicy, QScrollArea, QWidget,
@@ -588,8 +587,10 @@ class WarRoomPanel(QFrame):
             content: 消息内容
             state_id: 消息所属的状态 ID (用于时间轴过滤)
         """
+        print(f"[DEBUG] append_message called: role={role}, content length={len(content)}, state_id={state_id}")
         # 如果该角色有正在进行的流式消息，先结束它
         if role in self._streaming_messages:
+            print(f"[DEBUG] 角色{role}有流式消息，调用finalize_streaming_message")
             self.finalize_streaming_message(role, content)
             return
 
@@ -604,8 +605,10 @@ class WarRoomPanel(QFrame):
         # 创建可折叠消息卡片
         msg_widget = CollapsibleMessage(role, content, profile)
 
-        # 绑定状态标签
+        # 绑定状态标签和角色标识
         msg_widget.setProperty("state_id", state_id)
+        msg_widget.setProperty("role", role)  # 标记消息角色，便于后续查找
+        msg_widget.setProperty("is_streaming", False)  # 标记为非流式消息
 
         # 插到弹簧前面（倒数第一个是 stretch）
         insert_pos = self.message_layout.count() - 1
@@ -715,6 +718,7 @@ class WarRoomPanel(QFrame):
             role: 角色标识
             chunk: 流式片段内容
         """
+        print(f"[DEBUG] append_stream_chunk called: role={role}, chunk={repr(chunk)}")
         # 首次收到消息时隐藏占位提示
         if self.placeholder.isVisible():
             self.placeholder.setVisible(False)
@@ -726,8 +730,12 @@ class WarRoomPanel(QFrame):
         # 追加新片段到缓冲区
         self._streaming_buffers[role] += chunk
 
+        # 移除原先遍历所有消息寻找旧消息的错误逻辑
+        # 这种逻辑会导致如果该角色在历史中发过言，其后续流式都会被强制丢弃。
+
         # 检查是否已有该角色的流式消息部件
         if role not in self._streaming_messages:
+            print(f"[DEBUG] 创建新的流式消息部件 for {role}")
             # 创建新的流式消息部件
             profile = AGENT_PROFILES.get(role, {
                 "name": role, "color": COLORS['text_secondary'], "icon": "🤖"
@@ -740,6 +748,7 @@ class WarRoomPanel(QFrame):
             # 标记为流式消息
             msg_widget.setProperty("is_streaming", True)
             msg_widget.setProperty("stream_role", role)
+            msg_widget.setProperty("role", role)  # 设置角色标识
 
             # 添加到布局
             insert_pos = self.message_layout.count() - 1
@@ -749,44 +758,63 @@ class WarRoomPanel(QFrame):
             self._streaming_messages[role] = msg_widget
 
             # 根据当前过滤状态决定是否显示
-            # 注意：流式消息可能没有 state_id，我们使用 None
             if self._current_state != "ALL":
-                # 如果当前正在过滤，流式消息可能不可见
                 msg_widget.setVisible(False)
         else:
-            # 更新现有消息部件的内容
+            # print(f"[DEBUG] 更新现有流式消息部件 for {role}")
             msg_widget = self._streaming_messages[role]
-            # 获取消息部件的子控件并更新内容
-            # 这里需要修改 CollapsibleMessage 以支持内容更新
-            # 临时方案：删除旧部件，创建新部件
-            old_widget = msg_widget
-            self.message_layout.removeWidget(old_widget)
-            old_widget.deleteLater()
-
-            # 创建更新后的消息
-            profile = AGENT_PROFILES.get(role, {
-                "name": role, "color": COLORS['text_secondary'], "icon": "🤖"
-            })
+            
+            # 更新内容
             content_with_cursor = f"{self._streaming_buffers[role]}█"
-            new_widget = CollapsibleMessage(role, content_with_cursor, profile)
-            new_widget.setProperty("is_streaming", True)
-            new_widget.setProperty("stream_role", role)
+            
+            # 查找内容所在的 QLabel/QTextEdit 组件并更新
+            # CollapsibleMessage 使用了 QLabel 或者是 QTextEdit 存放 intro 和 detail
+            # 这里我们直接强制重新执行它的内部 _split_content 拆分并重新渲染
+            
+            # 清理旧的 bubble_layout 里的内容（除了 name_label 以外）
+            layout = msg_widget.bubble_container.layout()
+            
+            # 从后往前删，保留最后的 stretch 和 name_label
+            while layout.count() > 1: # 保留第一个元素通常是 name_label 或第一个 intro
+                item = layout.takeAt(1)
+                if item.widget():
+                    item.widget().deleteLater()
+                    
+            # 获取 name_label 后的第一个 intro_label
+            if layout.count() > 0:
+                first_item = layout.itemAt(0).widget()
+                # 如果这个不是 name_label，而是直接的 intro_label (User 角色)
+                if not getattr(first_item, 'text', lambda: "")().isupper(): # 简单判断是不是 name_label
+                    item = layout.takeAt(0)
+                    if item.widget():
+                        item.widget().deleteLater()
 
-            # 找到原来的位置插入
-            # 我们需要找到原部件的位置
-            insert_pos = 0
-            for i in range(self.message_layout.count()):
-                item = self.message_layout.itemAt(i)
-                if item and item.widget() == old_widget:
-                    insert_pos = i
-                    break
+            is_user = (role == "Commander") or (role == "User")
+            if not is_user and layout.count() == 0:
+                # 理论上保留 name_label，这里保守重建
+                profile = AGENT_PROFILES.get(role, AGENT_PROFILES["System"])
+                name_label = QLabel(profile["name"])
+                name_label.setStyleSheet(f"""
+                    color: {COLORS['text_secondary']};
+                    font-size: 10px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    border: none;
+                    background: transparent;
+                    margin-bottom: 2px;
+                """)
+                layout.addWidget(name_label)
 
-            self.message_layout.insertWidget(insert_pos, new_widget)
-            self._streaming_messages[role] = new_widget
+            intro, detail = msg_widget._split_content(content_with_cursor)
+            
+            if intro:
+                intro_label = QLabel(intro)
+                intro_label.setWordWrap(True)
+                layout.addWidget(intro_label)
 
-            # 根据过滤状态设置可见性
-            if self._current_state != "ALL":
-                new_widget.setVisible(False)
+            if detail:
+               msg_widget._init_detail_ui(detail, layout, is_user)
 
         # 滚动到底部
         self._scroll_to_bottom()
@@ -798,12 +826,15 @@ class WarRoomPanel(QFrame):
             role: 角色标识
             final_content: 最终完整内容（如果为None则使用缓冲区内容）
         """
+        print(f"[DEBUG] finalize_streaming_message called: role={role}, final_content provided={final_content is not None}")
         if role not in self._streaming_messages:
+            print(f"[DEBUG] 角色{role}没有流式消息，直接返回")
             return
 
         # 获取缓冲区的最终内容
         if final_content is None:
             final_content = self._streaming_buffers.get(role, "")
+        print(f"[DEBUG] 最终内容长度: {len(final_content)}")
 
         # 移除光标效果
         final_content = final_content.replace("█", "")
@@ -811,6 +842,7 @@ class WarRoomPanel(QFrame):
         # 移除旧的流式消息部件
         msg_widget = self._streaming_messages.pop(role, None)
         if msg_widget:
+            print(f"[DEBUG] 移除流式消息部件")
             self.message_layout.removeWidget(msg_widget)
             msg_widget.deleteLater()
 
@@ -820,11 +852,13 @@ class WarRoomPanel(QFrame):
 
         # 创建最终的普通消息
         if final_content.strip():
+            print(f"[DEBUG] 创建最终的普通消息")
             profile = AGENT_PROFILES.get(role, {
                 "name": role, "color": COLORS['text_secondary'], "icon": "🤖"
             })
             final_widget = CollapsibleMessage(role, final_content, profile)
             final_widget.setProperty("is_streaming", False)
+            final_widget.setProperty("role", role)  # 设置角色标识
 
             # 添加到布局末尾（在弹簧之前）
             insert_pos = self.message_layout.count() - 1

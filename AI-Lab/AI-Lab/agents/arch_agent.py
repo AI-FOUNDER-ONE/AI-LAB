@@ -39,13 +39,11 @@ ARCH_SYSTEM_PROMPT = """你是 AI-Lab-Commander 的 Architect（架构师），�
 1. **自然语言辩论**：
    - 就像在会议室里一样，直接回应上一位发言者（PM 或 Designer）。
    - 如果是 Designer 发言，评估其方案是否符合你的架构设计。
+   - ⚠️ **严禁客套与随意使用 `@角色名` 提及他人**：评价或陈述时请直接下定论。只有在**你需要把发言权强制交接给下一个人**时，才允许使用 `@角色名`。如果在发言完毕后不想强制丢麦克风给特定的人，**绝对不要**在文本里带 `@` 符号，系统会自动按照阶段流转分配。
    
 2. **结构化内容**（如果需要）：
    - **必须**先讲一段自然的摘要/总结（不要用标题）。
    - 然后使用 `## 核心架构` 或其他 Markdown 标题跟随具体技术细节。这样 UI 会自动折叠细节。
-
-示例：
-@Designer，你提出的这个 Redis 缓存方案太重了。我们的并发量不需要引入额外的中间件，直接用内存 LRU cache 足够。请简化你的设计。
 
 使用中文沟通。
 """
@@ -58,7 +56,7 @@ class ArchAgent(BaseAgent):
     正式版应切回 Anthropic Claude API。
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, tool_manager=None):
         # 从配置中动态加载模型参数
         from config import AGENT_MODELS
         model_config = AGENT_MODELS.get("Arch", {"provider": "hiapi", "model": "gpt-4o"})
@@ -68,6 +66,7 @@ class ArchAgent(BaseAgent):
             model_config=model_config,
             system_prompt=ARCH_SYSTEM_PROMPT,
             parent=parent,
+            tool_manager=tool_manager,
         )
         self._client = None
 

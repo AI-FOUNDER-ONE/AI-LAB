@@ -35,6 +35,7 @@ class BridgePanel(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.projectId = f"PROJ-{hash(self) % 10000:04d}"
+        self._is_sending = False  # 防止重复发送标志
         self._init_ui()
 
     def _init_ui(self):
@@ -142,26 +143,52 @@ class BridgePanel(QFrame):
 
     def _on_send(self):
         """发送消息"""
-        content = self.input_box.toPlainText().strip()
-        if not content and not self.current_attachment:
+        # 防止重复发送
+        if self._is_sending:
+            # print(f"[DEBUG] BridgePanel: 正在发送中，忽略重复调用")
             return
 
-        # Prepend attachment path if exists
-        context_msg = content
-        if self.current_attachment:
-            context_msg = f"[ATTACHMENT: {self.current_attachment}]\n{content}"
-            self.current_attachment = None # Reset after sending
-            self.status_label.setText("Waiting for mission data...")
-            self.input_box.setPlaceholderText("Brief the CKO...")
+        self._is_sending = True
+        try:
+            content = self.input_box.toPlainText().strip()
+            # print(f"[DEBUG] BridgePanel: _on_send called, content={repr(content)}, has_attachment={self.current_attachment is not None}")
 
-        print(f"[TRACE] BridgePanel: Emitting message_sent signal with content: {context_msg[:50]}...")
-        self.message_sent.emit(context_msg)
-        self.input_box.clear()
+            if not content and not self.current_attachment:
+                # print(f"[DEBUG] BridgePanel: 空内容，返回")
+                self._is_sending = False
+                return
 
-        # 显示用户消息
-        print("[TRACE] BridgePanel: Appending message to UI...")
-        self._append_message("Commander", content, COLORS['bg_secondary'])
-        self.btn_send.setEnabled(False) 
+            # Prepend attachment path if exists
+            context_msg = content
+            if self.current_attachment:
+                context_msg = f"[ATTACHMENT: {self.current_attachment}]\n{content}"
+                self.current_attachment = None # Reset after sending
+                self.status_label.setText("Waiting for mission data...")
+                self.input_box.setPlaceholderText("Brief the CKO...")
+
+            # print(f"[DEBUG] BridgePanel: Emitting message_sent signal with content: {context_msg[:100]}")
+            self.message_sent.emit(context_msg)
+
+            # 清空输入框
+            self.input_box.clear()
+
+            # 显示用户消息到UI
+            print("[DEBUG] BridgePanel: Appending message to UI...")
+            self._append_message("Commander", content, COLORS['bg_secondary'])
+            self.btn_send.setEnabled(False)
+
+            print(f"[DEBUG] BridgePanel: 发送完成")
+
+        except Exception as e:
+            print(f"[ERROR] BridgePanel: _on_send error: {e}")
+            import traceback
+            traceback.print_exc()
+            self._is_sending = False
+            raise
+        finally:
+            # 小延迟后重置发送标志，避免快速连续发送问题
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(500, lambda: setattr(self, '_is_sending', False)) 
         
 
 

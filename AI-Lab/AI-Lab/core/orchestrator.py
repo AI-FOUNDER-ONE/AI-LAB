@@ -391,18 +391,24 @@ class Orchestrator(QObject):
         if self.state_ctrl.current_state in (AppState.IDLE, AppState.COMPLETED):
              return
 
-        self.agent_response.emit(role, content)
-        self.session_store.append_meeting_log(role, content)
-
         # 首先检查是否为工具调用结果
         if content.startswith("__TOOL_RESULT__:"):
             try:
                 import json
                 tool_data = json.loads(content[len("__TOOL_RESULT__:"):])
+                
+                # 提取大模型的自然语言分析，如果没有则兜底
+                extracted_content = tool_data.get("content", "").strip()
+                if not extracted_content:
+                    extracted_content = "【已执行内部工具调用】"
+                
+                # 发射提取出来的自然语言文本
+                self.agent_response.emit(role, extracted_content)
+                self.session_store.append_meeting_log(role, extracted_content)
+
                 tool_calls = tool_data.get("tool_calls", [])
                 if not tool_calls:
-                    # 没有工具调用，回退到文本解析
-                    self._parse_text_decision(content)
+                    # 没有工具调用，直接返回
                     return
 
                 # 处理每个工具调用（通常只有一个）
@@ -434,11 +440,14 @@ class Orchestrator(QObject):
                 # 工具调用处理完毕，返回
                 return
             except Exception as e:
-                logger.error(f"解析工具调用结果失败: {e}")
-                # 解析失败，回退到文本解析
+                # 解析失败，发原始信号回退到文本解析
+                self.agent_response.emit(role, content)
+                self.session_store.append_meeting_log(role, content)
                 self._parse_text_decision(content)
         else:
             # 传统文本指令解析
+            self.agent_response.emit(role, content)
+            self.session_store.append_meeting_log(role, content)
             self._parse_text_decision(content)
 
     def _parse_text_decision(self, content: str):
@@ -654,37 +663,57 @@ class Orchestrator(QObject):
                 workspace_dir = os.path.join("data", "workspace")
                 os.makedirs(workspace_dir, exist_ok=True)
 
-                # 2. 正则提取代码
-                match = re.search(r"```([a-zA-Z]*)\n(.*?)```", content, re.DOTALL)
-                if match:
-                    lang_tag = match.group(1).strip().lower()
-                    pure_code = match.group(2)
+                # 2. 正则提取所有代码块
+                matches = list(re.finditer(r"```([a-zA-Z]*)\n(.*?)```", content, re.DOTALL))
+                
+                if matches:
+                    saved_files = []
+                    for i, match in enumerate(matches):
+                        lang_tag = match.group(1).strip().lower()
+                        pure_code = match.group(2)
+                        
+                        # 尝试从代码文本第一行提取文件名
+                        filename = None
+                        lines = pure_code.split('\n')
+                        if lines:
+                            first_line = lines[0].strip()
+                            # 匹配 // filename: x.js 或 # filename: x.py 或 /* filename: x.css */ 或 <!-- filename: x.html -->
+                            name_match = re.search(r'(?://|#|/\*|<!--)\s*filename:\s*([^\s\*>]+)', first_line, re.IGNORECASE)
+                            if name_match:
+                                filename = name_match.group(1).strip()
+                                # （可选）从纯代码中移除文件名那一行
+                                pure_code = '\n'.join(lines[1:]).strip()
 
-                    # 3. 动态文件后缀推导
-                    EXTENSION_MAP = {
-                        "python": ".py", "py": ".py",
-                        "javascript": ".js", "js": ".js",
-                        "typescript": ".ts", "ts": ".ts",
-                        "cpp": ".cpp", "c++": ".cpp",
-                        "c": ".c", "java": ".java",
-                        "html": ".html", "css": ".css",
-                        "json": ".json", "yaml": ".yaml", "yml": ".yml",
-                        "markdown": ".md", "md": ".md",
-                        "bash": ".sh", "sh": ".sh",
-                        "sql": ".sql"
-                    }
-                    ext = EXTENSION_MAP.get(lang_tag, ".py") # 如果未识别，默认 .py
+                        if not filename:
+                            # 3. 动态文件后缀推导 fallback
+                            EXTENSION_MAP = {
+                                "python": ".py", "py": ".py",
+                                "javascript": ".js", "js": ".js",
+                                "typescript": ".ts", "ts": ".ts",
+                                "cpp": ".cpp", "c++": ".cpp",
+                                "c": ".c", "java": ".java",
+                                "html": ".html", "css": ".css",
+                                "json": ".json", "yaml": ".yaml", "yml": ".yml",
+                                "markdown": ".md", "md": ".md",
+                                "bash": ".sh", "sh": ".sh",
+                                "sql": ".sql"
+                            }
+                            ext = EXTENSION_MAP.get(lang_tag, ".py") # 如果未识别，默认 .py
+                            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                            filename = f"generated_{timestamp}_{i}{ext}"
 
-                    # 4. 安全写入与命名
-                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"generated_{timestamp}{ext}"
-                    file_path = os.path.abspath(os.path.join(workspace_dir, filename))
+                        # 4. 安全写入与命名
+                        # 确保子目录结构被创建
+                        file_path = os.path.abspath(os.path.join(workspace_dir, filename))
+                        os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-                    with open(file_path, "w", encoding="utf-8") as f:
-                        f.write(pure_code)
+                        with open(file_path, "w", encoding="utf-8") as f:
+                            f.write(pure_code)
+                        saved_files.append(file_path)
 
                     # 5. 系统消息广播
-                    self.agent_response.emit("系统", f"💾 最终代码已保存至本地: {file_path}")
+                    joined_paths = "\n".join(saved_files)
+                    self.agent_response.emit("系统", f"💾 最终代码已保存至本地:\n{joined_paths}")
                 else:
                     logger.warning("Coder 输出中未提取到 Markdown 代码块，略过自动保存。")
             except Exception as e:
