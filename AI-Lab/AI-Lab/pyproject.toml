@@ -17,18 +17,6 @@ dependencies = [
     "crewai>=0.11.0",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-qt>=4.0.0",
-    "pytest-cov>=4.0.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "flake8>=6.0.0",
-    "mypy>=1.0.0",
-    "pre-commit>=3.0.0",
-]
-
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -88,3 +76,20 @@ filterwarnings = [
     "ignore::PendingDeprecationWarning",
     "ignore::ResourceWarning",
 ]
+
+# PEP 735 依赖组，供 uv 管理开发依赖（uv sync --group dev）
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-qt>=4.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+]
+
+[tool.uv]
+# 应用程序项目，不构建/发布为包，避免 uv sync 时触发构建
+package = false

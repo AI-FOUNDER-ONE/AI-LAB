@@ -136,37 +136,38 @@ class InteractionManager:
 
         # 1. Direct Mention Priority (@Role) - ANY role can mention another to hand off
         # Highest priority: If the last message explicitly mentions someone, they are next.
+        # 需求打磨阶段只允许 CKO 被呼叫，禁止其他角色插入
         if last_msg.mentions:
             for mention in last_msg.mentions:
-                # Find matching participant
                 for p in self.participants:
                     if p.lower() == mention.lower():
-                        # Anti-ping-pong: do not hand off to same person who just spoke
                         if p != last_msg.role:
+                            if current_stage == AppState.GROUNDING and p != "CKO":
+                                break  # 不交给非 CKO，继续走阶段逻辑
                             print(f"[InteractionManager] Route override: {last_msg.role} explicitly called @{p}")
                             return p
 
-        # 1.5 Explicit Next Speaker Directive (e.g. NEXT_SPEAKER: Arch)
-        # Check text body for routing keyword because @mentions are prohibited for PM style
+        # 1.5 下一发言者指令（下一发言者: 角色名 或 NEXT_SPEAKER: 角色名）
         if last_msg:
             import re
-            match = re.search(r'NEXT_SPEAKER:\s*([A-Za-z]+)', last_msg.content, re.IGNORECASE)
+            match = re.search(r'(?:下一发言者|NEXT_SPEAKER)\s*:\s*([A-Za-z]+)', last_msg.content, re.IGNORECASE)
             if match:
                 target = match.group(1).strip()
                 for p in self.participants:
                     if p.lower() == target.lower():
                         if p != last_msg.role:
+                            if current_stage == AppState.GROUNDING and p != "CKO":
+                                break  # 需求打磨阶段不交给非 CKO
                             print(f"[InteractionManager] Route override: {last_msg.role} directed next speaker to {p}")
                             return p
 
         # 2. Stage-Specific Routing Logic
         if current_stage == AppState.GROUNDING:
-            # In Grounding, if Commander just spoke, it's ALWAYS CKO's turn
+            # 仅允许 Commander ↔ CKO 对话，确认立项前其他角色不插入
             if last_msg.role == "Commander":
                 return "CKO"
             if last_msg.role == "CKO":
-                return "PM"
-            # If PM just spoke, wait for Commander to reply.
+                return None  # 等待用户继续与 CKO 讨论或点击「确认立项」
             return None
 
         # 3. User Command Override (NLP-inspired keywords)
@@ -328,7 +329,7 @@ class OrchestratorDynamic(QObject):
         print(f"DEBUG: Orchestrator.send_to_cko called with: {message[:30]}...")
         # Ensure we are in Grounding mode
         if self.state_ctrl.current_state == AppState.IDLE:
-             print("DEBUG: Transitioning from IDLE to GROUNDING")
+             print("DEBUG: 从空闲进入需求打磨")
              self.state_ctrl.transition_to(AppState.GROUNDING)
         
         # In Grounding, the Router should pick CKO.
@@ -405,15 +406,15 @@ class OrchestratorDynamic(QObject):
         # 3. Special Handling: PM Decision Parsing (Structured System Commands & NLP Cues)
         if last_msg and last_msg.role == "PM":
             content = last_msg.content
-            # Match structured system command: <SYS_CMD:APPROVE> or legacy "APPROVED", plus Grok NLP cues like NEXT_SPEAKER: Coder
-            approved = re.search(r'<SYS_CMD:(APPROVE|APPROVED)>', content, re.IGNORECASE) or \
-                       re.search(r'DECISION:\s*APPROVED', content, re.IGNORECASE) or \
-                       "APPROVED" in content or \
-                       re.search(r'NEXT_SPEAKER:\s*Coder', content, re.IGNORECASE)
+            # 匹配批准类指令：决策: 通过 / DECISION: APPROVED / 下一发言者: Coder 等
+            approved = (re.search(r'<SYS_CMD:(APPROVE|APPROVED)>', content, re.IGNORECASE) or
+                        re.search(r'(?:决策|DECISION)\s*:\s*(?:通过|APPROVED)', content, re.IGNORECASE) or
+                        "APPROVED" in content or "通过" in content or
+                        re.search(r'(?:下一发言者|NEXT_SPEAKER)\s*:\s*Coder', content, re.IGNORECASE))
 
             if approved and current_state == AppState.DEBATE:
                 self.state_ctrl.transition_to(AppState.PRODUCTION)
-                self.agent_response.emit("System", f"PM Approved Plan. Moving to PRODUCTION ({self.ctx.task_type}).")
+                self.agent_response.emit("System", f"PM 批准方案，进入执行阶段（{self.ctx.task_type}）。")
                 # Trigger initial coder kickoff by adding a system nudge
                 self.ctx.add_message("System", f"Phase changed to PRODUCTION. Team, please execute the {self.ctx.task_type} plan.")
                 QTimer.singleShot(1500, self._next_turn_ready.emit)
@@ -422,13 +423,11 @@ class OrchestratorDynamic(QObject):
         # 4. Delivery Handling (Structured System Commands & NLP Cues)
         if last_msg and last_msg.role == "PM":
             content = last_msg.content
-            # Match structured system command: <SYS_CMD:DELIVER> or legacy "DELIVER", plus Grok NLP cues like NEXT_SPEAKER: Validator or 终局圆满
-            delivered = re.search(r'<SYS_CMD:(DELIVER)>', content, re.IGNORECASE) or \
-                        "DELIVER" in content or \
-                        "测试终局发布" in content or \
-                        "圆满终局" in content or \
-                        "封神终局" in content or \
-                        re.search(r'NEXT_SPEAKER:\s*Validator', content, re.IGNORECASE)
+            # 匹配交付类指令：下一发言者: Validator / 终局发布 等
+            delivered = (re.search(r'<SYS_CMD:(DELIVER)>', content, re.IGNORECASE) or
+                        "DELIVER" in content or
+                        "测试终局发布" in content or "圆满终局" in content or "封神终局" in content or
+                        re.search(r'(?:下一发言者|NEXT_SPEAKER)\s*:\s*Validator', content, re.IGNORECASE))
 
             if delivered and current_state in [AppState.PRODUCTION, AppState.VERIFICATION]:
                 self._start_delivery()
@@ -469,7 +468,7 @@ class OrchestratorDynamic(QObject):
             f"2. 绝对禁止互相吹捧、客套废话或无意义的认同（如'你说的很对'、'非常赞同'等）。\n"
             f"3. 你的发言必须直奔主题，只输出干货、代码、实质性建议或决策。\n"
             f"4. ⚠️ 除非你真的需要强制将**下一个发言权**精准移交给某个人，否则**绝对不要**随意使用 `@角色名`（严禁客套）。系统会自动分配下一轮发言。\n"
-            f"   (PM可使用 `NEXT_SPEAKER: 角色名`，其他角色如确需交接请在句末使用 `@角色名`)。\n"
+            f"   (PM 可使用 `下一发言者: 角色名`，其他角色如确需交接请在句末使用 `@角色名`)。\n"
             f"5. 如果达成共识或你的任务已完成，请清楚地表达出来。\n\n"
             f"--- 历史对话 ---\n{recent_history}\n\n"
             f"你的回复:"
@@ -611,10 +610,10 @@ class OrchestratorDynamic(QObject):
             matches = list(re.finditer(r"```([a-zA-Z]*)\n(.*?)```", content, re.DOTALL))
             
             if matches:
-                # 4. 工作区目录初始化
-                workspace_dir = os.path.join("data", "workspace")
+                workspace_dir = self.session_store.get_workspace_dir()
+                if not workspace_dir:
+                    workspace_dir = os.path.join("data", "workspace", "default")
                 os.makedirs(workspace_dir, exist_ok=True)
-                
                 saved_files = []
                 for i, match in enumerate(matches):
                     lang_tag = match.group(1).strip().lower()

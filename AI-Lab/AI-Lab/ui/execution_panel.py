@@ -1,8 +1,7 @@
 """
-execution_panel.py - 执行与测试实验室 (Execution Lab)
-=====================================================
-右侧面板：实时查看 Coder 编写的代码（语法高亮）
-以及 Validator 的运行日志（终端风格输出）。
+execution_panel.py - 执行区
+===========================
+右侧面板：展示 Coder 产出代码（语法高亮）与 Validator 运行日志（终端风格）。
 """
 
 from PyQt6.QtWidgets import (
@@ -18,6 +17,13 @@ from PyQt6.QtGui import (
 import re
 
 from ui.styles import COLORS, get_panel_style, get_header_style, get_code_editor_style
+
+# 执行区代码/控制台：嵌入感与等宽字体
+INNER_BG = "#0D0D0D"
+INNER_BORDER = "#333333"
+MONO_FONT = "'Fira Code', 'SF Mono', Consolas, 'Courier New', monospace"
+# Mac 风格顶栏三色点
+TRAFFIC_RED, TRAFFIC_YELLOW, TRAFFIC_GREEN = "#FF5F57", "#FEBC2E", "#28C840"
 
 
 class PythonHighlighter(QSyntaxHighlighter):
@@ -112,35 +118,37 @@ class ExecutionPanel(QFrame):
         self._init_ui()
 
     def _init_ui(self):
-        """GitHub Style Execution Lab (Terminal Black)"""
+        """执行区与左中右三面板统一：提亮一级 #1F1F1F + 细边框 + 8px 圆角"""
         self.setObjectName("panel")
-        self.setStyleSheet(get_panel_style(bg=COLORS['bg_terminal']))
+        self.setStyleSheet(get_panel_style())
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(12)
 
-        # 1. Header (Small Label)
-        self.header_label = QLabel("EXECUTION LAB")
+        # 1. 标题
+        self.header_label = QLabel("执行区")
         self.header_label.setStyleSheet(get_header_style())
         layout.addWidget(self.header_label)
 
-        # 2. Splitter for Editor and Logs
+        # 2. 编辑器与日志分割（Cursor 风格：1px 细线）
         self.splitter = QSplitter(Qt.Orientation.Vertical)
-        self.splitter.setHandleWidth(1) # Hairline
+        self.splitter.setHandleWidth(1)
+        self.splitter.setStyleSheet("""
+            QSplitter::handle { background: transparent; height: 1px; max-height: 1px; }
+        """)
 
-        # --- Reference Docs Area (Top) ---
+        # 参考文档区（顶部）
         self.ref_container = QWidget()
-        self.ref_container.setFixedHeight(0) # Hidden by default
+        self.ref_container.setFixedHeight(0)
         self.ref_layout = QHBoxLayout(self.ref_container)
         self.ref_layout.setContentsMargins(0, 0, 0, 4)
         self.ref_layout.setSpacing(8)
         
-        ref_label = QLabel("🔗 REFERENCES:")
+        ref_label = QLabel("🔗 参考:")
         ref_label.setStyleSheet("color: #8B949E; font-size: 10px; font-weight: 700;")
         self.ref_layout.addWidget(ref_label)
         
-        # New: File Label for source code
         self.code_file_label = QLabel("")
         self.code_file_label.setStyleSheet("color: #58A6FF; font-size: 10px; font-weight: bold;")
         self.ref_layout.addWidget(self.code_file_label)
@@ -149,70 +157,124 @@ class ExecutionPanel(QFrame):
         
         layout.addWidget(self.ref_container)
 
-        # --- Editor Card ---
-        editor_container = QWidget()
+        # 源代码编辑区：Mac 风格顶栏（红黄绿点 + Code Tab）+ 嵌入感内容区
+        editor_container = QFrame()
+        editor_container.setStyleSheet(f"""
+            QFrame {{ background-color: #1a1a1a; border: 1px solid {INNER_BORDER}; border-radius: 6px; }}
+        """)
         editor_layout = QVBoxLayout(editor_container)
         editor_layout.setContentsMargins(0, 0, 0, 0)
-        editor_layout.setSpacing(8)
-        
-        editor_label = QLabel("SOURCE CODE")
-        editor_label.setStyleSheet("color: #8B949E; font-size: 10px; font-weight: 700;")
-        editor_layout.addWidget(editor_label)
-
+        editor_layout.setSpacing(0)
+        # 顶栏：仅用底边线区分层级，背景透明与卡片融合
+        editor_bar = QWidget()
+        editor_bar.setFixedHeight(28)
+        editor_bar.setStyleSheet("background: transparent; border-bottom: 1px solid #333; border-radius: 6px 6px 0 0;")
+        bar_layout = QHBoxLayout(editor_bar)
+        bar_layout.setContentsMargins(10, 0, 8, 0)
+        bar_layout.setSpacing(6)
+        for c in (TRAFFIC_RED, TRAFFIC_YELLOW, TRAFFIC_GREEN):
+            dot = QLabel()
+            dot.setFixedSize(10, 10)
+            dot.setStyleSheet(f"background-color: {c}; border: none; border-radius: 5px;")
+            bar_layout.addWidget(dot)
+        bar_layout.addSpacing(8)
+        code_tab = QLabel("Code")
+        code_tab.setStyleSheet("color: #8B949E; font-size: 11px; font-weight: 600; background: transparent;")
+        bar_layout.addWidget(code_tab)
+        bar_layout.addStretch()
+        editor_layout.addWidget(editor_bar)
+        # 内容区：深底 #0D0D0D、#333 边框、等宽字体
+        code_inner = QFrame()
+        code_inner.setStyleSheet(f"""
+            QFrame {{
+                background-color: {INNER_BG};
+                border: 1px solid {INNER_BORDER};
+                border-top: none;
+                border-radius: 0 0 6px 6px;
+            }}
+        """)
+        code_inner_layout = QVBoxLayout(code_inner)
+        code_inner_layout.setContentsMargins(0, 0, 0, 0)
         self.code_editor = QPlainTextEdit()
         self.code_editor.setReadOnly(True)
-        self.code_editor.setPlaceholderText("/* Code will manifest in GitHub Dark Dimmed... */")
+        self.code_editor.setPlaceholderText("/* 代码将在此显示… */")
         self.code_editor.setStyleSheet(f"""
             QPlainTextEdit {{
-                background-color: #000000;
+                background-color: {INNER_BG};
                 color: #C9D1D9;
-                border: 1px solid {COLORS['border']};
-                border-radius: 6px;
-                font-family: 'SFMono-Regular', Consolas, monospace;
+                border: none;
+                font-family: {MONO_FONT};
                 font-size: 13px;
-                padding: 8px;
+                padding: 10px;
             }}
         """)
+        self.code_editor.setFont(QFont("Fira Code", 13))
         self._highlighter = PythonHighlighter(self.code_editor.document())
-        editor_layout.addWidget(self.code_editor)
-        
+        code_inner_layout.addWidget(self.code_editor)
+        editor_layout.addWidget(code_inner)
         self.splitter.addWidget(editor_container)
 
-        # --- Logs Card ---
-        logs_container = QWidget()
+        # 运行控制台：顶栏（红黄绿点 + Terminal Tab）+ 嵌入感内容区
+        logs_container = QFrame()
+        logs_container.setStyleSheet(f"""
+            QFrame {{ background-color: #1a1a1a; border: 1px solid {INNER_BORDER}; border-radius: 6px; }}
+        """)
         logs_layout = QVBoxLayout(logs_container)
         logs_layout.setContentsMargins(0, 0, 0, 0)
-        logs_layout.setSpacing(8)
-        
-        logs_label = QLabel("RUNTIME CONSOLE")
-        logs_label.setStyleSheet("color: #8B949E; font-size: 10px; font-weight: 700;")
-        logs_layout.addWidget(logs_label)
-
-        self.log_console = QTextEdit()
-        self.log_console.setReadOnly(True)
-        self.log_console.setPlaceholderText("> Waiting for execution...")
-        self.log_console.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: #000000;
-                color: #B2B2B2;
-                border: 1px solid {COLORS['border']};
-                border-radius: 6px;
-                font-family: 'SFMono-Regular', Consolas, monospace;
-                font-size: 12px;
-                padding: 8px;
+        logs_layout.setSpacing(0)
+        logs_bar = QWidget()
+        logs_bar.setFixedHeight(28)
+        logs_bar.setStyleSheet("background: transparent; border-bottom: 1px solid #333; border-radius: 6px 6px 0 0;")
+        logs_bar_layout = QHBoxLayout(logs_bar)
+        logs_bar_layout.setContentsMargins(10, 0, 8, 0)
+        logs_bar_layout.setSpacing(6)
+        for c in (TRAFFIC_RED, TRAFFIC_YELLOW, TRAFFIC_GREEN):
+            dot = QLabel()
+            dot.setFixedSize(10, 10)
+            dot.setStyleSheet(f"background-color: {c}; border: none; border-radius: 5px;")
+            logs_bar_layout.addWidget(dot)
+        logs_bar_layout.addSpacing(8)
+        term_tab = QLabel("Terminal")
+        term_tab.setStyleSheet("color: #8B949E; font-size: 11px; font-weight: 600; background: transparent;")
+        logs_bar_layout.addWidget(term_tab)
+        logs_bar_layout.addStretch()
+        logs_layout.addWidget(logs_bar)
+        logs_inner = QFrame()
+        logs_inner.setStyleSheet(f"""
+            QFrame {{
+                background-color: {INNER_BG};
+                border: 1px solid {INNER_BORDER};
+                border-top: none;
+                border-radius: 0 0 6px 6px;
             }}
         """)
-        logs_layout.addWidget(self.log_console)
-        
+        logs_inner_layout = QVBoxLayout(logs_inner)
+        logs_inner_layout.setContentsMargins(0, 0, 0, 0)
+        self.log_console = QTextEdit()
+        self.log_console.setReadOnly(True)
+        self.log_console.setPlaceholderText("> 等待执行…")
+        self.log_console.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {INNER_BG};
+                color: #B2B2B2;
+                border: none;
+                font-family: {MONO_FONT};
+                font-size: 12px;
+                padding: 10px;
+            }}
+        """)
+        self.log_console.setFont(QFont("Fira Code", 12))
+        logs_inner_layout.addWidget(self.log_console)
+        logs_layout.addWidget(logs_inner)
         self.splitter.addWidget(logs_container)
 
         self.splitter.setSizes([600, 200])
         layout.addWidget(self.splitter)
         layout.setStretchFactor(self.splitter, 1)
 
-        # Status Label
-        self.status_label = QLabel("Terminal Idle")
-        self.status_label.setStyleSheet(f"color: {COLORS['text_tertiary']}; font-size: 11px;")
+        # 状态栏
+        self.status_label = QLabel("终端空闲")
+        self.status_label.setStyleSheet(f"color: {COLORS['text_tertiary']}; font-size: 11px; background: transparent; border: none;")
         layout.addWidget(self.status_label)
 
     def set_code(self, code: str, filename: str = ""):
@@ -232,7 +294,7 @@ class ExecutionPanel(QFrame):
         self.code_editor.insertPlainText(text)
 
     def add_reference_doc(self, file_path: str):
-        """Add a reference document link to the top bar"""
+        """在顶部栏添加参考文档链接"""
         import os
         filename = os.path.basename(file_path)
         
@@ -240,21 +302,21 @@ class ExecutionPanel(QFrame):
         btn_doc.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_doc.setStyleSheet(f"""
             QPushButton {{
-                background-color: {COLORS.get('bg_secondary', '#0D1117')};
-                color: {COLORS.get('accent_blue', '#58A6FF')};
-                border: 1px solid {COLORS.get('border', '#30363D')};
+                background-color: {COLORS['bg_secondary']};
+                color: {COLORS['accent_blue']};
+                border: 1px solid {COLORS['border_subtle']};
                 border-radius: 4px;
                 padding: 4px 8px;
                 font-size: 11px;
                 text-align: left;
             }}
             QPushButton:hover {{
-                background-color: {COLORS.get('border', '#30363D')};
+                background-color: {COLORS['border_subtle']};
             }}
         """)
         btn_doc.clicked.connect(lambda: self._open_file(file_path))
         
-        self.ref_container.setFixedHeight(32) # Show container
+        self.ref_container.setFixedHeight(32)
         self.ref_layout.insertWidget(self.ref_layout.count() - 1, btn_doc)
 
     def _open_file(self, path: str):
@@ -288,7 +350,7 @@ class ExecutionPanel(QFrame):
 
     def append_error_traceback(self, traceback_text: str):
         """追加错误 Traceback（红色高亮）"""
-        self.append_log("❌ ───── ERROR TRACEBACK ─────", "error")
+        self.append_log("❌ ───── 错误堆栈 ─────", "error")
         for line in traceback_text.strip().split("\n"):
             self.append_log(f"  {line}", "error")
         self.append_log("❌ ──────────────────────────", "error")

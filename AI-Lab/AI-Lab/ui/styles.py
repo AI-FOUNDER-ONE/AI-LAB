@@ -1,40 +1,45 @@
 """
-ui/styles.py - GitHub Dark Dimmed Theme System
-==============================================
-Strict pixel-perfect execution of GitHub-style aesthetics.
+ui/styles.py - 深色主题样式
+==========================
+面板、按钮、输入框、控制台等统一样式。
 """
 
 from PyQt6.QtGui import QSyntaxHighlighter, QTextCharFormat, QColor, QFont
 from PyQt6.QtCore import QRegularExpression
 
-# ---------- GitHub Dark Dimmed Palette ----------
+# ---------- 色板（暗黑层次：底层极暗，面板提亮一级）----------
 COLORS = {
-    'bg_primary': '#161B22',    # Panels / Cards (Lighter Dark)
-    'bg_secondary': '#0D1117',  # App Background / Input Bg (Deep Dark)
-    'bg_tertiary': '#21262d',   # Muted Blocks / Code (Lighter than Primary)
-    'bg_terminal': '#000000',   # Pure Black for Execution Lab
+    'bg_base': '#141414',       # 全局底层极暗灰黑
+    'bg_panel': '#1F1F1F',     # 左中右三面板卡片（提亮一级）
+    'bg_primary': '#252526',    # 侧栏
+    'bg_secondary': '#1e1e1e',  # 主背景
+    'bg_tertiary': '#2a2a2a',   # 悬浮/选中
+    'bg_avatar': '#313131',     # 头像/图标底
+    'bg_terminal': '#1e1e1e',
+    'accent_primary_blue': '#1677FF',  # 确认立项等核心操作（科技蓝）
     
-    'text_primary': '#FFFFFF',  # Headers / Titles
-    'text_secondary': '#C9D1D9',# Body / Main Text
-    'text_tertiary': '#8B949E', # Muted / Labels
+    'text_primary': '#CCCCCC',
+    'text_secondary': '#CCCCCC',
+    'text_tertiary': '#858585',
     
-    'border': '#30363D',        # Borders
+    'border': '#3c3c3c',
+    'border_subtle': '#2a2a2a',
     
-    'accent_green': '#238636',  # GitHub Green (Confirm Button)
-    'accent_blue': '#58A6FF',   # GitHub Blue (Links/Icons)
-    'accent_gold': '#F59E0B',   # Gold/Amber (CKO Accent)
-    'accent_purple': '#8957e5', # GitHub Purple (Markdown Headers)
-    'accent_orange': '#d29922', # GitHub Orange (Blockquotes)
-    'accent_red': '#F85149',    # Red (Fail Status)
-    'accent_primary': '#58A6FF',
-    'accent_header': '#161B22',
+    'accent_green': '#3c8b7e',  # 柔和绿（确认立项不突兀）
+    'accent_blue': '#569CD6',
+    'accent_gold': '#DCDCAA',
+    'accent_purple': '#C586C0',
+    'accent_orange': '#CE9178',
+    'accent_red': '#F14C4C',
+    'accent_primary': '#569CD6',
+    'accent_header': '#252526',
 }
 
 def get_main_stylesheet() -> str:
-    """Global Reset for GitHub Dark Mode"""
+    """全局深色主题（底层极暗灰黑 #141414）"""
     return f"""
     QMainWindow {{
-        background-color: {COLORS['bg_secondary']};
+        background-color: {COLORS['bg_base']};
         color: {COLORS['text_secondary']};
     }}
     QWidget {{
@@ -48,52 +53,61 @@ def get_main_stylesheet() -> str:
         background: transparent;
         border: none;
     }}
+    /* Cursor 风格：分割条不显示线条，仅保留拖拽区域 */
     QSplitter::handle {{
-        background-color: {COLORS['border']};
+        background: transparent;
         width: 1px;
         height: 1px;
+        max-width: 1px;
+        max-height: 1px;
     }}
     """
 
 def get_navbar_style() -> str:
-    """GitHub Header Style"""
+    """顶栏样式（Cursor 风：无底边线）"""
     return f"""
     QFrame#navbar {{
         background-color: {COLORS['bg_primary']};
-        border-bottom: 1px solid {COLORS['border']};
+        border: none;
     }}
     QLabel#nav_title {{
         color: {COLORS['text_primary']};
-        font-weight: 600;
-        font-size: 14px;
+        font-weight: 500;
+        font-size: 13px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        background: transparent;
+        border: none;
     }}
     """
 
 def get_panel_style(bg: str = None) -> str:
-    """GitHub Card Style"""
-    target_bg = bg if bg else COLORS['bg_primary']
+    """左中右三面板卡片：提亮一级 #1F1F1F，细边框，8px 圆角"""
+    target_bg = bg if bg else COLORS['bg_panel']
     return f"""
     QFrame#panel {{
         background-color: {target_bg};
-        border: 1px solid {COLORS['border']};
-        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
     }}
     """
 
 def get_header_style() -> str:
-    """GitHub Small Label Header"""
+    """面板小标题样式（Cursor 字体与色），背景透明以透出面板"""
     return f"""
     QLabel {{
         color: {COLORS['text_tertiary']};
         font-size: 11px;
-        font-weight: 600;
+        font-weight: 500;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
         text-transform: uppercase;
         letter-spacing: 0.02em;
+        background: transparent;
+        border: none;
     }}
     """
 
 def get_input_style() -> str:
-    """GitHub Chat Bar Style"""
+    """输入框样式"""
     return f"""
     QTextEdit, QLineEdit {{
         background-color: {COLORS['bg_secondary']};
@@ -109,41 +123,49 @@ def get_input_style() -> str:
     """
 
 def get_button_style(variant: str = "primary") -> str:
-    """GitHub Button Variants"""
-    if variant == "success": # GitHub Green
-        bg = COLORS['accent_green']
+    """按钮样式（含确认立项科技蓝 + Hover 提亮）"""
+    if variant == "success":
+        # 确认立项：科技感主题蓝 #1677FF，白字，Hover 提亮
+        bg = COLORS.get('accent_primary_blue', '#1677FF')
         color = "#FFFFFF"
-        border = "1px solid rgba(240, 246, 252, 0.1)"
-        hover = "#2EA043"
+        border = "none"
+        hover = "#4096FF"
     elif variant == "icon":
         bg = "transparent"
         color = COLORS['text_tertiary']
         border = "none"
-        hover = "rgba(255, 255, 255, 0.1)"
-    else: # Default Dark
-        bg = "#21262D"
-        color = COLORS['text_secondary']
-        border = "1px solid #30363D"
-        hover = "#30363D"
-        
+        hover = "rgba(255, 255, 255, 0.08)"
+    else:
+        bg = COLORS['bg_tertiary']
+        color = COLORS['text_primary']
+        border = "none"
+        hover = "#3c3c3c"
     return f"""
     QPushButton {{
         background-color: {bg};
         color: {color};
         border: {border};
-        border-radius: 6px;
-        padding: 4px 12px;
-        font-weight: 600;
-        font-size: 12px;
+        border-radius: 4px;
+        padding: 6px 14px;
+        font-weight: 500;
+        font-size: 13px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     }}
     QPushButton:hover {{
-        background-color: {hover if variant != "icon" else "rgba(255, 255, 255, 0.1)"};
-        { "color: #FFFFFF;" if variant == "icon" else "" }
+        background-color: {hover};
+        color: {color};
+    }}
+    QPushButton:pressed {{
+        background-color: #505050;
+    }}
+    QPushButton:disabled {{
+        background-color: #2a2a2a;
+        color: #666666;
     }}
     """
 
 def get_log_console_style() -> str:
-    """GitHub Style Console"""
+    """运行控制台样式"""
     return f"""
     QTextEdit {{
         background-color: {COLORS['bg_terminal']};

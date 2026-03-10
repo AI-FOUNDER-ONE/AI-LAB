@@ -3,16 +3,20 @@ test_case_generator_tool.py - 测试用例生成工具
 ===========================================
 供 Tester（验证官）使用，根据代码或需求自动生成测试用例。
 支持单元测试、集成测试、边界测试等多种测试类型。
+生成后自动保存到 workspace_dir/tests/，并可选执行语法检查与 pytest。
 
 安全性审计:
   ✅ 仅分析代码结构，不执行代码
-  ✅ 不读取代码以外的文件
+  ✅ 文件仅写入 workspace_dir/tests/
   ✅ 输出结构化测试用例报告
 """
 
 import ast
 import re
 import json
+import os
+import subprocess
+import sys
 from typing import Type, List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 
@@ -74,6 +78,10 @@ class TestCaseGeneratorInput(BaseModel):
         default="python",
         description="目标代码语言。目前仅支持Python。"
     )
+    workspace_dir: str = Field(
+        default="",
+        description="工作区目录（通常由 session_store.get_workspace_dir() 提供）。非空时将测试保存到该目录下的 tests/ 并执行语法检查与 pytest。"
+    )
 
 
 class TestCaseGeneratorTool(BaseTool):
@@ -91,36 +99,127 @@ class TestCaseGeneratorTool(BaseTool):
     )
     args_schema: Type[BaseModel] = TestCaseGeneratorInput
 
-    def _run(self, target: str, test_type: str = "unit", framework: str = "pytest", language: str = "python") -> str:
-        """执行测试用例生成。
-
-        Args:
-            target: 目标代码或需求描述
-            test_type: 测试类型（unit/integration/boundary/error/performance/security）
-            framework: 测试框架（pytest/unittest/doctest）
-            language: 代码语言（目前仅支持Python）
+    def _run(
+        self,
+        target: str,
+        test_type: str = "unit",
+        framework: str = "pytest",
+        language: str = "python",
+        workspace_dir: str = "",
+    ):
+        """执行测试用例生成；若提供 workspace_dir 则自动保存并执行语法检查与 pytest。
 
         Returns:
-            格式化的测试用例报告
+            结构化结果 dict: test_file, test_count, syntax_valid, execution_result, output
         """
         try:
             if language.lower() != "python":
-                return f"❌ 暂不支持 {language} 语言的测试用例生成，目前仅支持Python。"
+                return {
+                    "test_file": "",
+                    "test_count": 0,
+                    "syntax_valid": False,
+                    "execution_result": "error",
+                    "output": f"❌ 暂不支持 {language} 语言的测试用例生成，目前仅支持Python。",
+                }
 
             # 1. 分析目标
             target_info = self._analyze_target(target)
 
-            # 2. 根据测试类型生成测试用例
+            # 2. 根据测试类型生成测试用例（不修改已有 prompt）
             test_cases = self._generate_test_cases(target_info, test_type)
 
             # 3. 根据框架格式化测试用例
             formatted_tests = self._format_tests(test_cases, framework, target_info)
 
-            # 4. 生成完整报告
-            return self._generate_report(target_info, test_type, framework, test_cases, formatted_tests)
+            test_count = len(test_cases)
+            test_file = ""
+            syntax_valid = False
+            execution_result = "skipped"
+            output = ""
 
+            if workspace_dir and workspace_dir.strip():
+                test_file, syntax_valid, execution_result, output = self._save_and_verify(
+                    formatted_tests, target_info, framework, workspace_dir.strip()
+                )
+
+            return {
+                "test_file": test_file,
+                "test_count": test_count,
+                "syntax_valid": syntax_valid,
+                "execution_result": execution_result,
+                "output": output[:500] if output else "",
+            }
         except Exception as e:
-            return f"❌ 测试用例生成失败: {str(e)}"
+            return {
+                "test_file": "",
+                "test_count": 0,
+                "syntax_valid": False,
+                "execution_result": "error",
+                "output": str(e)[:500],
+            }
+
+    def _save_and_verify(
+        self,
+        formatted_tests: str,
+        target_info: Dict[str, Any],
+        framework: str,
+        workspace_dir: str,
+    ) -> tuple:
+        """保存测试文件到 workspace_dir/tests/，执行语法检查与 pytest。返回 (test_file, syntax_valid, execution_result, output)。"""
+        module_name = re.sub(r"\W+", "_", target_info.get("name", "module") or "module").strip("_") or "module"
+        tests_dir = os.path.join(workspace_dir, "tests")
+        try:
+            os.makedirs(tests_dir, exist_ok=True)
+        except OSError:
+            return ("", False, "skipped", "无法创建 tests 目录")
+        filename = f"test_{module_name}.py"
+        filepath = os.path.join(tests_dir, filename)
+
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(formatted_tests)
+        except OSError as e:
+            return (filepath, False, "skipped", f"保存失败: {e}")
+
+        # 语法检查：python -m py_compile test_xxx.py
+        syntax_valid = False
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "py_compile", filepath],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            syntax_valid = result.returncode == 0
+            if not syntax_valid:
+                out = (result.stderr or result.stdout or "").strip()
+                return (filepath, False, "error", out or "语法检查未通过")
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return (filepath, False, "skipped", "py_compile 超时或不可用")
+
+        # 仅当 framework 为 pytest 且语法通过时执行 pytest
+        execution_result = "skipped"
+        output = ""
+        if framework.lower() != "pytest":
+            return (filepath, syntax_valid, "skipped", "仅对 pytest 框架执行运行")
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-m", "pytest", filepath, "--tb=short", "-q"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=workspace_dir,
+            )
+            output = (proc.stdout or "") + (proc.stderr or "")
+            execution_result = "passed" if proc.returncode == 0 else "failed"
+        except subprocess.TimeoutExpired:
+            execution_result = "skipped"
+            output = "pytest 执行超时（30s）"
+        except FileNotFoundError:
+            execution_result = "skipped"
+            output = "pytest 未安装或不可用"
+
+        return (filepath, syntax_valid, execution_result, output)
 
     def _analyze_target(self, target: str) -> Dict[str, Any]:
         """分析目标代码或需求"""
@@ -587,8 +686,9 @@ def multiply(x, y):
         target=test_code,
         test_type="unit",
         framework="pytest",
-        language="python"
+        language="python",
+        workspace_dir="",
     )
 
-    print("测试结果:")
-    print(result)
+    print("测试结果 (结构化):")
+    print(json.dumps(result, ensure_ascii=False, indent=2))

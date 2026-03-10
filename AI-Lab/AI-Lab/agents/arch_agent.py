@@ -121,6 +121,20 @@ class ArchAgent(BaseAgent):
         except Exception as e:
             print(f"[ArchAgent] 工具注册失败: {e}")
 
+        # context_retriever - 从 meeting_logs 语义检索历史（与 Crew 工具解耦，始终尝试注册）
+        try:
+            from tools.context_retriever import context_retriever as _context_retriever
+            def context_retriever(query: str, max_results: int = 5) -> dict:
+                store = (self.parent().session_store if self.parent() and getattr(self.parent(), "session_store", None) else None)
+                return _context_retriever(query=query, session_store=store, max_results=max_results)
+            self.register_tool(
+                context_retriever,
+                name="context_retriever",
+                description="从当前会话的会议记录中检索与 query 最相关的历史消息。返回 results: [{speaker, content, timestamp, relevance}]。用于长对话中找回关键信息。"
+            )
+        except Exception as e:
+            print(f"[ArchAgent] context_retriever 注册失败: {e}")
+
     def _init_client(self):
         """延迟初始化客户端"""
         if self._client is None:

@@ -12,6 +12,8 @@ try:
     from tools.crew_tools import CodeWriterTool, DocxParserTool
     from tools.code_review_tool import CodeReviewTool
     from tools.documentation_generator_tool import DocumentationGeneratorTool
+    from tools.file_reader import file_reader as file_reader_fn
+    from tools.file_writer import file_writer as file_writer_fn
     TOOLS_AVAILABLE = True
 except ImportError as e:
     # crewai可能不可用，提供空值
@@ -19,13 +21,18 @@ except ImportError as e:
     crew_tool_to_schema = None
     CodeWriterTool = None
     DocxParserTool = None
-    CodeReviewTool = None
     DocumentationGeneratorTool = None
+    file_reader_fn = None
+    file_writer_fn = None
     print(f"[CoderAgent] 工具导入警告: {e}. 原生Function Calling工具将不可用。")
 
 
 CODER_SYSTEM_PROMPT = """你是 AI-Lab-Commander 的 Executor（执行官）。
 你的核心职责是根据 Upstream（上游）确定的方案和指令，产出最终的执行成果。
+
+**阶段纪律（必须遵守）**：
+- 仅在「执行阶段」产出完整代码或文档。每次被调用时，请以 Prompt 中的【当前阶段】为准。
+- 若当前为「方案博弈」阶段：只可简要说明实现思路或伪代码，**禁止输出可执行代码块**；被问到「如何实现」时只答架构/设计层面。
 
 **你的行为准则**：
 1. **绝对服从指令**：严格按照 Mission Protocol 和 PM/Arch/Designer 的要求执行。
@@ -108,42 +115,75 @@ class CoderAgent(BaseAgent):
             else:
                 print("[CoderAgent] DocumentationGeneratorTool不可用，跳过注册")
 
+            # 5. file_reader - 读取工作区文件（workspace_dir 由 session_store 注入）
+            if file_reader_fn is not None:
+                def read_file(filepath: str, workspace_dir: str = "") -> dict:
+                    """读取工作区中的文件内容。filepath 为相对路径，如 src/main.py"""
+                    if not workspace_dir and self.parent() and getattr(self.parent(), "session_store", None):
+                        workspace_dir = (self.parent().session_store.get_workspace_dir() or "") or ""
+                    return file_reader_fn(filepath=filepath, workspace_dir=workspace_dir)
+                self.register_tool(read_file, name="file_reader",
+                                 description="读取工作区中已有文件的内容。filepath 为相对于工作区的路径（如 src/main.py）。返回 path、content、size、exists；二进制文件返回 binary 标记。")
+
+            # 6. file_writer - 写入工作区文件（workspace_dir 由 session_store 注入）
+            if file_writer_fn is not None:
+                def write_file(filepath: str, content: str, workspace_dir: str = "",
+                              mode: str = "write", line_number=None) -> dict:
+                    """写入工作区文件。mode: write(覆盖)/append(追加)/insert(在 line_number 行后插入)"""
+                    if not workspace_dir and self.parent() and getattr(self.parent(), "session_store", None):
+                        workspace_dir = (self.parent().session_store.get_workspace_dir() or "") or ""
+                    return file_writer_fn(filepath=filepath, content=content, workspace_dir=workspace_dir,
+                                         mode=mode, line_number=line_number)
+                self.register_tool(write_file, name="file_writer",
+                                 description="写入工作区文件。filepath 为相对路径；mode: write(覆盖)、append(追加)、insert(需 line_number 指定行后插入)。写入前自动备份已存在文件到 .backup/。返回 path、written、size、message。")
+
             print(f"[CoderAgent] 已注册 {len(self.tools)} 个工具")
         except Exception as e:
             print(f"[CoderAgent] 工具注册失败: {e}")
 
+        # context_retriever - 从 meeting_logs 语义检索历史（与 Crew 工具解耦，始终尝试注册）
+        try:
+            from tools.context_retriever import context_retriever as _context_retriever
+            def context_retriever(query: str, max_results: int = 5) -> dict:
+                store = (self.parent().session_store if self.parent() and getattr(self.parent(), "session_store", None) else None)
+                return _context_retriever(query=query, session_store=store, max_results=max_results)
+            self.register_tool(
+                context_retriever,
+                name="context_retriever",
+                description="从当前会话的会议记录中检索与 query 最相关的历史消息。返回 results: [{speaker, content, timestamp, relevance}]。用于长对话中找回关键信息。"
+            )
+        except Exception as e:
+            print(f"[CoderAgent] context_retriever 注册失败: {e}")
+
+        # shell_executor - 沙箱执行 shell（workspace_dir 由 session_store 注入）
+        try:
+            from tools.shell_executor import shell_executor as _shell_executor
+            def shell_executor(command: str, workspace_dir: str = "", timeout: int = 30) -> dict:
+                if not workspace_dir and self.parent() and getattr(self.parent(), "session_store", None):
+                    workspace_dir = (self.parent().session_store.get_workspace_dir() or "") or ""
+                return _shell_executor(command=command, workspace_dir=workspace_dir, timeout=timeout)
+            self.register_tool(
+                shell_executor,
+                name="shell_executor",
+                description="在沙箱中执行白名单内命令（python/pip/pytest/pylint/cat/ls/grep/find/git status|diff|log 等）。禁止链式、管道、rm/sudo/curl/wget。工作目录为当前会话工作区，超时最多 60 秒。返回 stdout、stderr、return_code、timed_out。"
+            )
+        except Exception as e:
+            print(f"[CoderAgent] shell_executor 注册失败: {e}")
+
     def _init_client(self):
-        """延迟初始化客户端（支持 Qwen 和 Custom Claude）"""
+        """延迟初始化客户端（claude_custom 保留直连，其余走工厂）"""
         if self._client is None:
             provider = self.model_config.get("provider", "qwen")
-            
-            try:
+            if provider == "claude_custom":
                 from openai import OpenAI
-                
-                if provider == "qwen":
-                    api_key = API_KEYS.get("qwen", "")
-                    base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-                elif provider == "claude_custom":
-                    api_key = API_KEYS.get("claude_custom", "")
-                    # 用户提供的 Endpoint
-                    base_url = self.model_config.get("base_url", "https://yunyi.rdzhvip.com/claude")
-                elif provider == "bigmodel":
-                    api_key = API_KEYS.get("bigmodel", "")
-                    base_url = self.model_config.get("base_url", "https://open.bigmodel.cn/api/coding/paas/v4")
-                else:
-                    raise ValueError(f"CoderAgent 不支持的 Provider: {provider}")
-
-                if api_key:
-                    self._client = OpenAI(
-                        api_key=api_key,
-                        base_url=base_url,
-                        max_retries=5,
-                    )
-                else:
-                    raise ValueError(f"{provider.upper()}_API_KEY 未配置")
-                    
-            except ImportError:
-                raise ImportError("请安装 openai: pip install openai")
+                api_key = API_KEYS.get("claude_custom", "")
+                if not api_key:
+                    raise ValueError("CLAUDE_CUSTOM_API_KEY 未配置")
+                base_url = self.model_config.get("base_url", "https://yunyi.rdzhvip.com/claude")
+                self._client = OpenAI(api_key=api_key, base_url=base_url, max_retries=5)
+            else:
+                from core.llm_client_factory import create_llm_client
+                self._client = create_llm_client(provider, self.model_config)
 
     def _call_api(self, messages: list, tools: list = None) -> str:
         """调用通义千问 API，支持原生 Function Calling

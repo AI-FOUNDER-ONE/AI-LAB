@@ -154,7 +154,7 @@ class Orchestrator(QObject):
     """核心编排引擎 (PM 主导模式)
 
     工作流:
-    IDLE → GROUNDING(CKO) → DEBATE(PM解读→Arch→Designer→CKO审计→PM审批)
+    空闲 → 需求打磨(CKO) → 方案博弈(PM解读→Arch→Designer→CKO审计→PM审批)
     → PRODUCTION(Coder) → VERIFICATION(Tester→CKO审计) → COMPLETED
 
     PM 在 DEBATE 阶段扮演双重角色:
@@ -229,7 +229,7 @@ class Orchestrator(QObject):
         self.state_ctrl.error_occurred.connect(self.error_occurred.emit)
 
     # ======================================================================
-    #  第一阶段: GROUNDING — 用户与 CKO 对话
+    #  第一阶段：需求打磨 — 用户与 CKO 对话
     # ======================================================================
 
     def send_to_cko(self, message: str):
@@ -238,9 +238,9 @@ class Orchestrator(QObject):
         Args:
             message: 用户输入的消息
 
-        自动将状态从 IDLE 转换到 GROUNDING（如果当前是 IDLE）。
+        自动将状态从空闲转换到需求打磨（如果当前是空闲）。
         """
-        # 如果当前是 IDLE，转换到 GROUNDING
+        # 如果当前是空闲，转换到需求打磨
         if self.state_ctrl.current_state == AppState.IDLE:
             if not self.state_ctrl.transition_to(AppState.GROUNDING):
                 return
@@ -295,7 +295,7 @@ class Orchestrator(QObject):
         # 更新会话
         self.session_store.update_session(mission_protocol=self._mission_protocol)
 
-        # 状态转换: GROUNDING → DEBATE
+        # 状态转换：需求打磨 → 方案博弈
         if not self.state_ctrl.transition_to(AppState.DEBATE):
             return
 
@@ -375,9 +375,9 @@ class Orchestrator(QObject):
             f"我是系统。当前博弈进行到第 {self._debate_round} 次交互。\n"
             f"请回顾最新的对话进展：\n\n{history}\n\n"
             f"作为主持人，请决定下一步行动。\n"
-            f"如果需要某人发言，输出 `NEXT_SPEAKER: [角色]`。\n"
-            f"如果方案已完善，输出 `DECISION: APPROVED`。\n"
-            f"如果方案严重跑偏，输出 `DECISION: REJECTED`。"
+            f"如果需要某人发言，输出 `下一发言者: [角色]`。\n"
+            f"如果方案已完善，输出 `决策: 通过`。\n"
+            f"如果方案严重跑偏，输出 `决策: 驳回`。"
         )
 
         worker = AgentWorker(self.pm, moderator_msg, self)
@@ -451,20 +451,22 @@ class Orchestrator(QObject):
             self._parse_text_decision(content)
 
     def _parse_text_decision(self, content: str):
-        """解析传统的文本指令（NEXT_SPEAKER: / DECISION:）"""
+        """解析文本指令（下一发言者: / 决策:，兼容英文 NEXT_SPEAKER / DECISION）"""
         import re
         next_speaker = None
         decision = None
-
-        if "NEXT_SPEAKER:" in content:
-            match = re.search(r"NEXT_SPEAKER:\s*(\w+)", content)
-            if match:
-                next_speaker = match.group(1)
-
-        if "DECISION:" in content:
-            match = re.search(r"DECISION:\s*(\w+)", content)
-            if match:
-                decision = match.group(1)
+        # 下一发言者: 角色名 或 NEXT_SPEAKER: 角色名
+        m = re.search(r"(?:下一发言者|NEXT_SPEAKER)\s*:\s*(\w+)", content, re.IGNORECASE)
+        if m:
+            next_speaker = m.group(1)
+        # 决策: 通过/驳回 或 DECISION: APPROVED/REJECTED
+        m = re.search(r"(?:决策|DECISION)\s*:\s*(\w+)", content, re.IGNORECASE)
+        if m:
+            raw = m.group(1).strip()
+            if raw in ("通过", "APPROVED", "批准"):
+                decision = "APPROVED"
+            elif raw in ("驳回", "REJECTED", "拒绝"):
+                decision = "REJECTED"
 
         # 执行决策
         if decision == "APPROVED":
@@ -659,8 +661,9 @@ class Orchestrator(QObject):
                 import re
                 import datetime
 
-                # 1. 工作区目录初始化
-                workspace_dir = os.path.join("data", "workspace")
+                workspace_dir = self.session_store.get_workspace_dir()
+                if not workspace_dir:
+                    workspace_dir = os.path.join("data", "workspace", "default")
                 os.makedirs(workspace_dir, exist_ok=True)
 
                 # 2. 正则提取所有代码块

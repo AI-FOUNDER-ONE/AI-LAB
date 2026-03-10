@@ -18,6 +18,7 @@ from .settings import (
     SESSIONS_DIR,
     KNOWLEDGE_DIR,
     GENERATED_DOCS_DIR,
+    WORKSPACE_ROOT,
 
     # UI配置
     APP_TITLE,
@@ -44,6 +45,7 @@ __all__ = [
     'SESSIONS_DIR',
     'KNOWLEDGE_DIR',
     'GENERATED_DOCS_DIR',
+    'WORKSPACE_ROOT',
     'APP_TITLE',
     'WINDOW_MIN_WIDTH',
     'WINDOW_MIN_HEIGHT',

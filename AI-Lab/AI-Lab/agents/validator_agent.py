@@ -57,13 +57,9 @@ class ValidatorAgent(BaseAgent):
     """
 
     def __init__(self, parent=None, tool_manager=None):
-        # 从配置中动态加载模型参数
-        from config import AGENT_MODELS
-        model_config = AGENT_MODELS.get("Validator", {"provider": "deepseek", "model": "deepseek-chat"})
-
         super().__init__(
             role="Validator",
-            model_config=model_config,
+            model_config={"provider": "deepseek", "model": "deepseek-chat"},
             system_prompt=VALIDATOR_SYSTEM_PROMPT,
             parent=parent,
             tool_manager=tool_manager,
@@ -88,15 +84,20 @@ class ValidatorAgent(BaseAgent):
             self.register_tool(validate_code, name="code_validator",
                              description="对 Python 代码进行静态验证和质量检查。输入Python代码字符串，输出包含语法检查、常见问题检测、规范性建议的验证报告。")
 
-            # 2. TestCaseGeneratorTool - 测试用例生成工具
+            # 2. TestCaseGeneratorTool - 测试用例生成工具（自动从 session_store 取 workspace_dir 保存并执行）
             test_generator = TestCaseGeneratorTool()
             def generate_test_cases(target: str, test_type: str = "unit",
-                                  framework: str = "pytest", language: str = "python") -> str:
-                """根据代码或需求自动生成测试用例"""
-                return test_generator._run(target=target, test_type=test_type,
-                                          framework=framework, language=language)
+                                  framework: str = "pytest", language: str = "python"):
+                """根据代码或需求自动生成测试用例，保存到工作区 tests/ 并执行语法检查与 pytest"""
+                workspace_dir = ""
+                if self.parent() and getattr(self.parent(), "session_store", None):
+                    workspace_dir = (self.parent().session_store.get_workspace_dir() or "") or ""
+                return test_generator._run(
+                    target=target, test_type=test_type, framework=framework,
+                    language=language, workspace_dir=workspace_dir,
+                )
             self.register_tool(generate_test_cases, name="test_case_generator",
-                             description="根据代码或需求自动生成测试用例。支持单元测试、集成测试、边界测试等多种测试类型。输出结构化测试用例，可直接用于测试执行。")
+                             description="根据代码或需求自动生成测试用例。支持单元测试、集成测试、边界测试等多种测试类型。生成后保存到工作区 tests/ 并执行语法检查与 pytest，返回结构化结果。")
 
             # 3. PerformanceAnalyzerTool - 性能分析工具
             if PerformanceAnalyzerTool is not None:
@@ -118,27 +119,40 @@ class ValidatorAgent(BaseAgent):
         except Exception as e:
             print(f"[ValidatorAgent] 工具注册失败: {e}")
 
+        # context_retriever - 从 meeting_logs 语义检索历史（与 Crew 工具解耦，始终尝试注册）
+        try:
+            from tools.context_retriever import context_retriever as _context_retriever
+            def context_retriever(query: str, max_results: int = 5) -> dict:
+                store = (self.parent().session_store if self.parent() and getattr(self.parent(), "session_store", None) else None)
+                return _context_retriever(query=query, session_store=store, max_results=max_results)
+            self.register_tool(
+                context_retriever,
+                name="context_retriever",
+                description="从当前会话的会议记录中检索与 query 最相关的历史消息。返回 results: [{speaker, content, timestamp, relevance}]。用于长对话中找回关键信息。"
+            )
+        except Exception as e:
+            print(f"[ValidatorAgent] context_retriever 注册失败: {e}")
+
+        # shell_executor - 沙箱执行 shell（workspace_dir 由 session_store 注入）
+        try:
+            from tools.shell_executor import shell_executor as _shell_executor
+            def shell_executor(command: str, workspace_dir: str = "", timeout: int = 30) -> dict:
+                if not workspace_dir and self.parent() and getattr(self.parent(), "session_store", None):
+                    workspace_dir = (self.parent().session_store.get_workspace_dir() or "") or ""
+                return _shell_executor(command=command, workspace_dir=workspace_dir, timeout=timeout)
+            self.register_tool(
+                shell_executor,
+                name="shell_executor",
+                description="在沙箱中执行白名单内命令（python/pip/pytest/pylint/cat/ls/grep/find/git status|diff|log 等）。禁止链式、管道、rm/sudo/curl/wget。工作目录为当前会话工作区，超时最多 60 秒。返回 stdout、stderr、return_code、timed_out。"
+            )
+        except Exception as e:
+            print(f"[ValidatorAgent] shell_executor 注册失败: {e}")
+
     def _init_client(self):
-        """延迟初始化 AI 客户端"""
+        """延迟初始化 AI 客户端（Anthropic/ZhipuAI 保留原逻辑，其余走工厂）"""
         if self._client is None:
             provider = self.model_config.get("provider", "deepseek")
-            
-            if provider == "deepseek":
-                try:
-                    from openai import OpenAI
-                    api_key = API_KEYS.get("deepseek", "")
-                    if api_key:
-                        self._client = OpenAI(
-                            api_key=api_key,
-                            base_url="https://api.deepseek.com",
-                            max_retries=5,
-                        )
-                    else:
-                        raise ValueError("DEEPSEEK_API_KEY 未配置")
-                except ImportError:
-                    raise ImportError("请安装 openai: pip install openai")
-            
-            elif provider == "anthropic":
+            if provider == "anthropic":
                 try:
                     import anthropic
                     api_key = API_KEYS.get("anthropic", "")
@@ -148,7 +162,6 @@ class ValidatorAgent(BaseAgent):
                         raise ValueError("ANTHROPIC_API_KEY 未配置")
                 except ImportError:
                     raise ImportError("请安装 anthropic: pip install anthropic")
-
             elif provider == "zhipuai":
                 try:
                     from zhipuai import ZhipuAI
@@ -159,6 +172,9 @@ class ValidatorAgent(BaseAgent):
                         raise ValueError("ZHIPUAI_API_KEY 未配置")
                 except ImportError:
                     raise ImportError("请安装 zhipuai: pip install zhipuai")
+            else:
+                from core.llm_client_factory import create_llm_client
+                self._client = create_llm_client(provider, self.model_config)
 
     def _call_api(self, messages: list, tools: list = None) -> str:
         """调用 AI API，支持原生 Function Calling"""

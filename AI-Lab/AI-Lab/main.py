@@ -18,6 +18,7 @@ QMainWindow 主窗口，组装所有 UI 面板并连接信号与槽。
   ✅ 异常处理覆盖信号连接和 UI 操作
 """
 
+import re
 import sys
 import traceback
 import os
@@ -38,12 +39,14 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QWidget, QMenuBar, QMenu,
     QFrame, QHBoxLayout, QLabel, QPushButton
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont, QAction
 
-from config import APP_TITLE, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT
+from config import APP_TITLE, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT, AppState
+# TODO: migrate to UnifiedOrchestrator
 from core.orchestrator import Orchestrator
 from core.logger import setup_logging, logger
+# TODO: migrate to UnifiedOrchestrator
 from core.orchestrator_dynamic import OrchestratorDynamic
 from core.unified_orchestrator import UnifiedOrchestrator
 from ui.bridge_panel import BridgePanel
@@ -109,10 +112,28 @@ class MainWindow(QMainWindow):
         # ------ 连接信号与槽 ------
         self._connect_signals()
 
+        # 应用退出时强制落盘会话数据（SessionStore 增量写入防抖后需在退出时 flush）
+        app = QApplication.instance()
+        if app:
+            app.aboutToQuit.connect(self._flush_session_store)
+
+        # ------ 定时刷新左侧 AI 在线状态（每 20 秒，全阶段一致）------
+        self._status_refresh_timer = QTimer(self)
+        self._status_refresh_timer.timeout.connect(self._refresh_roles_online_from_state)
+        self._status_refresh_timer.start(20_000)  # 20 秒
+
+    def _flush_session_store(self):
+        """应用退出时将会话未落盘改动写入磁盘"""
+        try:
+            self.orchestrator.session_store.flush()
+        except Exception:
+            pass
+
     def _init_layout(self):
         """初始化主窗口三列 + 底部时间轴布局"""
-        # 中央容器
+        # 中央容器（全局底层极暗灰黑 #141414）
         central_widget = QWidget()
+        central_widget.setStyleSheet(f"background-color: {COLORS['bg_base']};")
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 16) # Top 0 for Navbar
@@ -128,30 +149,27 @@ class MainWindow(QMainWindow):
         content_layout.setContentsMargins(16, 16, 16, 0)
         content_layout.setSpacing(16)
         
-        # ------ 三列分割器 ------
+        # ------ 三列分割器（Cursor 风格：1px 细线，无粗分割条）------
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.splitter.setHandleWidth(16) # 增加列间距
+        self.splitter.setHandleWidth(1)
+        self.splitter.setStyleSheet("""
+            QSplitter::handle { background: transparent; width: 1px; max-width: 1px; }
+        """)
 
-        # 左: Bridge 面板（CKO 对话区）
+        # 左: 桥接区（仅角色列表） 中: 作战室（主聊区） 右: 执行面板
         self.splitter.addWidget(self.bridge_panel)
-
-        # 中: War Room 面板（博弈直播间）
         self.splitter.addWidget(self.warroom_panel)
-
-        # 右: Execution 面板（代码 + 日志）
         self.splitter.addWidget(self.execution_panel)
 
-        # 设置初始比例 (War Room Focus: 20% / 60% / 20%)
-        # Assuming min width ~1200px
-        self.splitter.setSizes([240, 720, 240])
+        # 参照微信群聊比例：左侧窄、中间宽、右侧窄
+        self.bridge_panel.setMinimumWidth(160)
+        self.warroom_panel.setMinimumWidth(420)
+        self.execution_panel.setMinimumWidth(200)
+        self.splitter.setSizes([200, 780, 220])
 
-        # [FIX] 固定拉伸因子，防止文件名等内容撧开面板比例
-        # War Room (index=1) 获得最大拉伸权重
-        self.splitter.setStretchFactor(0, 1)   # Bridge: 低拉伸
-        self.splitter.setStretchFactor(1, 3)   # War Room: 高拉伸
-        self.splitter.setStretchFactor(2, 1)   # Execution: 低拉伸
-
-        # [FIX] 禁止子面板按内容大小拉伸，强制使用设定比例
+        self.splitter.setStretchFactor(0, 0)   # 桥接区尽量窄
+        self.splitter.setStretchFactor(1, 1)   # 作战室占满剩余
+        self.splitter.setStretchFactor(2, 0)   # 执行面板固定感
         self.splitter.setChildrenCollapsible(False)
 
         content_layout.addWidget(self.splitter, stretch=1)
@@ -184,18 +202,17 @@ class MainWindow(QMainWindow):
         
         layout.addStretch()
         
-        # [NEW] GitHub Green Confirm Button (Top Right)
-        # 连接到 orchestrator.confirm_project 触发 Phase 2
-        self.btn_confirm_nav = QPushButton("Confirm Project")
+        # 确认立项按钮（需求打磨完成后启用）
+        self.btn_confirm_nav = QPushButton("确认立项")
         self.btn_confirm_nav.setStyleSheet(get_button_style(variant="success"))
         self.btn_confirm_nav.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_confirm_nav.setFixedSize(130, 28)
         self.btn_confirm_nav.setEnabled(False)  # Phase 1 完成前禁用
         layout.addWidget(self.btn_confirm_nav)
         
-        # Icon Buttons
+        # 图标按钮
         btn_new = QPushButton("＋")
-        btn_new.setToolTip("New Session")
+        btn_new.setToolTip("新会话")
         btn_new.clicked.connect(self._on_new_session)
         btn_new.setFixedSize(28, 28)
         btn_new.setStyleSheet(get_button_style(variant="icon"))
@@ -210,9 +227,13 @@ class MainWindow(QMainWindow):
             QStatusBar {{
                 background-color: {COLORS['bg_secondary']};
                 color: {COLORS['text_secondary']};
-                border-top: 1px solid {COLORS['border']};
+                border: none;
                 font-size: 12px;
                 padding: 4px;
+            }}
+            QStatusBar QLabel {{
+                background: transparent;
+                border: none;
             }}
         """)
 
@@ -220,28 +241,13 @@ class MainWindow(QMainWindow):
         """连接所有信号与槽"""
 
         # ============================================================
-        #  Bridge → Orchestrator: 用户消息 → CrewAI
+        #  War Room 输入 → 统一对话入口（需求/干预均由作战室发送）
         # ============================================================
-        self.bridge_panel.message_sent.connect(
-            self.orchestrator.send_to_cko
-        )
+        self.warroom_panel.user_intervention_sent.connect(self._on_warroom_message_sent)
+        self.warroom_panel.rework_requested.connect(self._on_rework_requested)
+        self.warroom_panel.file_linked.connect(self.execution_panel.add_reference_doc)
 
-        # ============================================================
-        #  Confirm Button → Orchestrator: 确认项目 → Phase 2 启动
-        # ============================================================
-        self.btn_confirm_nav.clicked.connect(
-            self._on_confirm_project
-        )
-        self.warroom_panel.user_intervention_sent.connect(
-            self.orchestrator.handle_user_intervention
-        )
-        
-        # ============================================================
-        #  Bridge → Execution: 文件链接
-        # ============================================================
-        self.bridge_panel.file_linked.connect(
-            self.execution_panel.add_reference_doc
-        )
+        self.btn_confirm_nav.clicked.connect(self._on_confirm_project)
 
         # ============================================================
         #  Orchestrator → Bridge: CKO 回复
@@ -256,6 +262,9 @@ class MainWindow(QMainWindow):
         self.orchestrator.state_changed.connect(
             self._on_state_changed
         )
+
+        # 初始在线状态：按当前阶段显示对应角色在线（避免启动后“全离线”）
+        self._apply_roles_online_for_state(self.orchestrator.state_ctrl.current_state)
 
         # ============================================================
         #  Orchestrator → 错误处理
@@ -272,32 +281,23 @@ class MainWindow(QMainWindow):
         )
 
         # ============================================================
-        #  CKO Agent 输入状态 → Bridge 面板
+        #  Agent 输入/结束 → Bridge 角色状态 + War Room 打字状态
         # ============================================================
-        self.orchestrator.agents_map["CKO"].typing_started.connect(
-            lambda: self.bridge_panel.set_ke_typing(True)
-        )
-        self.orchestrator.agents_map["CKO"].typing_finished.connect(
-            lambda: self.bridge_panel.set_ke_typing(False)
-        )
-
-        # ============================================================
-        #  Debate Agent 输入状态 → War Room 面板
-        # ============================================================
-        # Use a list of (proxy_agent, role_name) tuples for explicit mapping
+        self.orchestrator.agent_typing.connect(self._on_agent_typing)
         debate_agents = [
             (self.orchestrator.agents_map["PM"], "PM"),
             (self.orchestrator.agents_map["Arch"], "Arch"),
-            (self.orchestrator.agents_map["Designer"], "Designer")
+            (self.orchestrator.agents_map["Designer"], "Designer"),
+            (self.orchestrator.agents_map["CKO"], "CKO"),
+            (self.orchestrator.agents_map["Coder"], "Coder"),
+            (self.orchestrator.agents_map["Validator"], "Validator"),
         ]
-        
         for agent_proxy, role_id in debate_agents:
-            # Fix: AgentProxy objects emit (is_typing: bool)
             agent_proxy.typing_started.connect(
-                lambda role=role_id: self.warroom_panel.set_typing_status(role, True)
+                lambda r=role_id: self.warroom_panel.set_typing_status(r, True)
             )
             agent_proxy.typing_finished.connect(
-                lambda role=role_id: self.warroom_panel.set_typing_status(role, False)
+                lambda r=role_id: self.warroom_panel.set_typing_status(r, False)
             )
 
         # (Removed duplicate user_intervention_sent connection)
@@ -320,74 +320,53 @@ class MainWindow(QMainWindow):
     #  信号处理槽函数
     # ==================================================================
 
-    def _dispatch_agent_response(self, role: str, content: str):
-        """根据角色分发 Agent 回复到对应的 UI 面板（重构版 - 解耦角色硬编码）
-
-        Args:
-            role: Agent 角色标识
-            content: 回复内容
-        """
-        # 获取当前状态 ID，用于标记消息
-        current_state = self.orchestrator.state_ctrl.current_state
-
-        # 1. Commander 消息直接写入 War Room 并返回
-        if role == "Commander":
-            self.warroom_panel.append_message(role, content, state_id=current_state)
-            return
-
-        # 2. CKO（原 KE）特殊处理：Bridge 面板 + War Room
-        if role == "CKO":
-            # 1. 始终显示在 Bridge 面板 (确保立项主要流程完整)
-            self.bridge_panel.append_ke_response(content)
-            # 2. 同时显示在 War Room (作为公屏回应)
-            self.warroom_panel.append_message(role, content, state_id=current_state)
-            # 3. Enable Confirm Button in Navbar
-            self.btn_confirm_nav.setEnabled(True)
-            # 后续处理（代码提取和日志标签）仍然执行
-        # 3. 系统消息特殊处理
-        elif role == "系统":
-            self.warroom_panel.append_system_event(content)
-            # 后续处理（代码提取和日志标签）仍然执行
-        else:
-            # 4. 所有其他角色消息统一写入 War Room
-            self.warroom_panel.append_message(role, content, state_id=current_state)
-
-        # 5. 增强正则提取所有语言的代码块（支持多语言）
-        import re
-        code_match = re.search(r"```[a-zA-Z]*\n(.*?)```", content, re.DOTALL)
-        if code_match:
-            code = code_match.group(1).strip()
-            # 默认文件名为 generated.py，可根据语言后缀调整
-            filename = "generated.py"
-            # 可选：提取语言标记
-            lang_match = re.search(r"```([a-zA-Z]+)", content)
-            if lang_match:
-                lang = lang_match.group(1).lower()
-                # 语言到文件扩展名的映射表
-                EXTENSION_MAP = {
-                    "python": "generated.py",
-                    "py": "generated.py",
-                    "javascript": "generated.js",
-                    "js": "generated.js",
-                    "typescript": "generated.ts",
-                    "ts": "generated.ts",
-                    "java": "Generated.java",
-                    "cpp": "generated.cpp",
-                    "c++": "generated.cpp",
-                    "go": "generated.go",
-                    "rust": "generated.rs",
-                    "html": "generated.html",
-                    "css": "generated.css",
-                    "markdown": "generated.md",
-                    "md": "generated.md",
-                    "json": "generated.json",
-                }
-                filename = EXTENSION_MAP.get(lang, "generated.py")
+    def _extract_and_save_code(self, content: str, agent_name: str) -> None:
+        """从回复内容中提取 Markdown 代码块并写入 ExecutionPanel（支持多语言、多个代码块）。"""
+        EXTENSION_MAP = {
+            "python": "generated.py",
+            "py": "generated.py",
+            "javascript": "generated.js",
+            "js": "generated.js",
+            "typescript": "generated.ts",
+            "ts": "generated.ts",
+            "java": "Generated.java",
+            "cpp": "generated.cpp",
+            "c++": "generated.cpp",
+            "go": "generated.go",
+            "rust": "generated.rs",
+            "html": "generated.html",
+            "css": "generated.css",
+            "markdown": "generated.md",
+            "md": "generated.md",
+            "json": "generated.json",
+        }
+        code_matches = re.findall(r"```([a-zA-Z]*)\n(.*?)```", content, re.DOTALL)
+        for lang, code in code_matches:
+            code = code.strip()
+            filename = EXTENSION_MAP.get((lang or "").lower(), "generated.py")
             self.execution_panel.set_code(code, filename=filename)
 
-        # 6. 结构化系统日志标签处理
+    def _check_state_transition(self, content: str, agent_name: str) -> None:
+        """检查回复内容是否触发状态转换（预留扩展点，当前由 Orchestrator 侧驱动状态）。"""
+        pass
+
+    def _update_ui_for_response(self, agent_name: str, content: str) -> None:
+        """根据角色更新 War Room、ExecutionPanel、Bridge 状态等 UI。"""
+        current_state = self.orchestrator.state_ctrl.current_state
+        if agent_name not in ("Commander", "系统"):
+            self.bridge_panel.set_role_status(agent_name, "idle")
+        if agent_name == "Commander":
+            self.warroom_panel.append_message(agent_name, content, state_id=current_state)
+            return
+        if agent_name == "CKO":
+            self.warroom_panel.append_message(agent_name, content, state_id=current_state)
+            self.btn_confirm_nav.setEnabled(True)
+        elif agent_name == "系统":
+            self.warroom_panel.append_system_event(content)
+        else:
+            self.warroom_panel.append_message(agent_name, content, state_id=current_state)
+
         if "<SYS_LOG:SUCCESS>" in content:
-            # 提取标签后的内容（可选）
             log_content = content.replace("<SYS_LOG:SUCCESS>", "").strip()
             self.execution_panel.append_log(log_content, level="success")
         elif "<SYS_LOG:ERROR>" in content:
@@ -400,8 +379,7 @@ class MainWindow(QMainWindow):
             log_content = content.replace("<SYS_LOG:WARNING>", "").strip()
             self.execution_panel.append_log(log_content, level="warning")
 
-        # 7. 兼容 Validator 表情符号检测
-        if role == "Validator":
+        if agent_name == "Validator":
             if "✅" in content or "验证通过" in content or "测试通过" in content:
                 self.execution_panel.append_log(content, level="success")
             elif "❌" in content or "验证失败" in content or "测试失败" in content:
@@ -409,44 +387,109 @@ class MainWindow(QMainWindow):
             else:
                 self.execution_panel.append_log(content, level="info")
 
+    def _log_agent_response(self, agent_name: str, content: str) -> None:
+        """写入会议日志。当前由 Orchestrator 在发出 agent_response 前已写入 session_store，此处为扩展点。"""
+        pass
+
+    def _dispatch_agent_response(self, role: str, content: str) -> None:
+        """根据角色分发 Agent 回复到对应的 UI 面板；对话仅在 War Room，Bridge 仅展示角色状态。"""
+        self._update_ui_for_response(role, content)
+        if role == "Commander":
+            return
+        self._extract_and_save_code(content, role)
+        self._check_state_transition(content, role)
+        self._log_agent_response(role, content)
+
+    def _on_agent_typing(self, role: str, is_typing: bool):
+        """更新 Bridge 角色状态"""
+        self.bridge_panel.set_role_status(role, "typing" if is_typing else "idle")
+
     def _on_agent_stream_chunk(self, role: str, chunk: str):
-        """处理 Agent 流式输出片段"""
-        # 转发到 War Room 面板进行打字机效果显示
+        """所有角色流式输出均在 War Room 展示（打字机仅非折叠部分）"""
         self.warroom_panel.append_stream_chunk(role, chunk)
-        # 同时记录到执行面板日志（可选，用于调试）
-        self.execution_panel.append_log(f"[{role}] 流式输出: {chunk}", level="debug")
+        self.bridge_panel.set_role_status(role, "speaking")
+
+    def _on_warroom_message_sent(self, content: str):
+        """作战室发送的消息：需求阶段走 CKO，其余阶段走用户干预"""
+        state = self.orchestrator.state_ctrl.current_state
+        if state in (AppState.IDLE, AppState.GROUNDING):
+            self.orchestrator.send_to_cko(content)
+        else:
+            self.orchestrator.handle_user_intervention(content)
+
+    def _on_rework_requested(self, feedback: str):
+        """用户提交「哪里不满意」并请求重新评审方案"""
+        self.warroom_panel.set_rework_visible(False)
+        self.orchestrator.request_rework(feedback)
 
     def _on_confirm_project(self):
-        """用户点击 Confirm Project 按钮"""
-        self.btn_confirm_nav.setEnabled(False)  # 防止重复点击
-        self.btn_confirm_nav.setText("Processing...")
+        """用户点击确认立项按钮"""
+        self.btn_confirm_nav.setEnabled(False)
+        self.btn_confirm_nav.setText("处理中…")
         self.orchestrator.confirm_project()
+
+    def _roles_online_for_state(self, state_id: str):
+        """根据当前阶段返回应在左侧显示为「在线」的角色列表（与状态机一致）"""
+        if state_id == AppState.GROUNDING:
+            return ["CKO"]
+        if state_id == AppState.DEBATE:
+            return ["PM", "Arch", "Designer"]
+        if state_id == AppState.PRODUCTION:
+            return ["Coder"]
+        if state_id == AppState.VERIFICATION:
+            return ["Validator"]
+        if state_id == "DESIGNING":
+            return ["Arch", "Coder", "PM"]
+        if state_id == "AWAITING_CONFIRM":
+            return ["CKO", "PM"]
+        if state_id == AppState.IDLE:
+            # 空闲时下一阶段为需求打磨，CKO 作为首轮参与角色显示为在线
+            return ["CKO"]
+        # DELIVERY / COMPLETED 等：显示为空
+        return []
+
+    def _apply_roles_online_for_state(self, state_id: str):
+        """根据状态更新左侧成员列表的在线指示灯"""
+        self.bridge_panel.set_roles_online(self._roles_online_for_state(state_id))
+
+    def _refresh_roles_online_from_state(self):
+        """定时回调：按当前阶段刷新左侧 AI 在线状态（每 20 秒，全阶段实时一致）"""
+        try:
+            state = self.orchestrator.state_ctrl.current_state
+            self._apply_roles_online_for_state(state)
+        except Exception:
+            pass
 
     def _on_state_changed(self, state_id: str, description: str):
         """状态变更时更新 UI
 
         Args:
-            state_id: 状态标识 (如 GROUNDING, AWAITING_CONFIRM, DESIGNING 等)
-            description: 状态描述文本
+            state_id: 旧状态（信号第一参数）
+            description: 新状态（信号第二参数，用于时间轴与在线角色）
         """
-        # 更新时间轴
-        self.timeline_panel.set_current_state(state_id)
+        # 更新时间轴（使用新状态）
+        self.timeline_panel.set_current_state(description)
         
         # 只要状态变更，War Room 自动显示全部
         self.warroom_panel.filter_messages("ALL")
 
+        # 任务完成时显示「不满意→重新评审」区，否则隐藏
+        self.warroom_panel.set_rework_visible(description == AppState.COMPLETED)
+
         # 更新状态栏
         self.statusBar().showMessage(f"🔄 {description}")
 
+        # 按新状态更新左侧成员列表的在线指示灯
+        self._apply_roles_online_for_state(description)
+
         # ===== Phase 1 完成 → 启用 Confirm 按钮 =====
-        if state_id == "AWAITING_CONFIRM":
+        if description == AppState.GROUNDING:
             self.btn_confirm_nav.setEnabled(True)
-            self.btn_confirm_nav.setText("✅ Confirm Project")
+            self.btn_confirm_nav.setText("✅ 确认立项")
             self.btn_confirm_nav.setStyleSheet(get_button_style(variant="success"))
-        elif state_id == "DESIGNING":
-            self.warroom_panel.set_active_roles(["Arch", "Coder", "PM"])
+        elif description == AppState.DEBATE:
             self.warroom_panel.append_system_event("🚀 项目已确认，设计阶段开始")
-        elif state_id == "COMPLETED":
+        elif description == AppState.COMPLETED:
             self.execution_panel.set_status("✅ 任务完成!")
 
     def _on_error(self, error_msg: str):
@@ -475,7 +518,7 @@ class MainWindow(QMainWindow):
         # 清空所有面板
         self.bridge_panel.set_status("💡 状态：等待输入需求...")
         self.warroom_panel.clear_display()
-        self.warroom_panel.set_active_roles([])
+        self.bridge_panel.set_roles_online([])
         self.execution_panel.clear_code()
         self.execution_panel.clear_log()
         self.timeline_panel.reset()

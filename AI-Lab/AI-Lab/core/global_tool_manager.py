@@ -13,6 +13,8 @@ global_tool_manager.py - 全局工具管理器
 import time
 import json
 import logging
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from enum import Enum
 from typing import Dict, List, Set, Optional, Any, Callable, Tuple
 from dataclasses import dataclass, field
@@ -21,6 +23,75 @@ from datetime import datetime
 # 导入现有的ToolSecurityManager和枚举
 from core.tool_security import ToolSecurityManager, ToolPermission
 from config import AppState
+
+
+class ToolTimeoutError(Exception):
+    """工具执行超时异常"""
+    def __init__(self, tool_name: str, timeout_seconds: float):
+        self.tool_name = tool_name
+        self.timeout_seconds = timeout_seconds
+        super().__init__(f"工具 '{tool_name}' 执行超时 ({timeout_seconds}s)")
+
+# ---------- 工具权限矩阵：角色 + 阶段 ----------
+# 未在 TOOL_PERMISSIONS 中配置的工具默认对所有角色和阶段开放
+TOOL_PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
+    "requirements_analyzer": {
+        "allowed_roles": ["CKO", "PM"],
+        "allowed_stages": ["GROUNDING", "DEBATE"],
+    },
+    "code_validator": {
+        "allowed_roles": ["Validator", "Coder"],
+        "allowed_stages": ["PRODUCTION", "VERIFICATION"],
+    },
+    "code_reviewer": {
+        "allowed_roles": ["Validator", "CKO"],
+        "allowed_stages": ["PRODUCTION", "VERIFICATION"],
+    },
+    "architecture_evaluator": {
+        "allowed_roles": ["Arch", "CKO"],
+        "allowed_stages": ["DEBATE", "VERIFICATION"],
+    },
+    "mermaid_generator": {
+        "allowed_roles": ["Arch", "Designer"],
+        "allowed_stages": ["DEBATE", "PRODUCTION"],
+    },
+    "file_reader": {
+        "allowed_roles": [],
+        "allowed_stages": [],
+    },
+    "file_writer": {
+        "allowed_roles": ["Coder"],
+        "allowed_stages": ["PRODUCTION"],
+    },
+    "checklist_tracker": {
+        "allowed_roles": ["PM", "CKO"],
+        "allowed_stages": [],  # 空表示所有阶段可用
+    },
+    "context_retriever": {
+        "allowed_roles": [],  # 所有角色
+        "allowed_stages": [],  # 所有阶段
+    },
+    "shell_executor": {
+        "allowed_roles": ["Coder", "Validator"],
+        "allowed_stages": ["PRODUCTION", "VERIFICATION"],
+    },
+    "json_schema_validator": {
+        "allowed_roles": ["PM", "CKO"],
+        "allowed_stages": [],  # 所有阶段
+    },
+}
+
+# ---------- 工具超时与重试配置 ----------
+TOOL_CONFIG: Dict[str, Any] = {
+    "default_timeout": 30,
+    "default_max_retries": 0,
+    "overrides": {
+        "docx_generator": {"timeout": 60, "max_retries": 1},
+        "web_search": {"timeout": 15, "max_retries": 2},
+        "code_validator": {"timeout": 45, "max_retries": 0},
+        "knowledge_retriever": {"timeout": 20, "max_retries": 1},
+    },
+}
 
 
 class TaskCategory(Enum):
@@ -68,18 +139,6 @@ class ToolMetadata:
     limitations: str = ""
 
 
-@dataclass
-class ContextInfo:
-    """上下文信息"""
-    current_state: AppState
-    current_role: str
-    task_category: TaskCategory
-    mission_protocol: Optional[str] = None
-    recent_messages: List[str] = field(default_factory=list)
-    active_agents: List[str] = field(default_factory=list)
-    project_type: str = "general"
-
-
 class GlobalToolManager(ToolSecurityManager):
     """全局工具管理器：扩展ToolSecurityManager，添加上下文感知功能"""
 
@@ -90,55 +149,202 @@ class GlobalToolManager(ToolSecurityManager):
         # 工具元数据存储
         self.tool_metadata: Dict[str, ToolMetadata] = {}
 
-        # 上下文信息
-        self.current_context: Optional[ContextInfo] = None
+        # 最小上下文（仅用于 execute_tool_safely 阶段权限与 get_tool_schema 默认 stage）
+        self._current_state: Optional[AppState] = None
+        self._current_role: Optional[str] = None
 
-        # 工具推荐权重
-        self.recommendation_weights = {
-            "category_match": 2.0,
-            "state_match": 1.5,
-            "role_match": 1.2,
-            "recent_usage": 0.8,
-            "success_rate": 1.0,
+        # 结构化执行日志（供 get_execution_logs / get_execution_stats 使用）
+        self._execution_logs: List[Dict[str, Any]] = []
+
+        # 超时执行用线程池（超时/重试对工具函数透明）
+        self._executor = ThreadPoolExecutor(max_workers=8)
+
+    def _normalize_stage(self, stage: Any) -> str:
+        """将阶段转为字符串（AppState 使用 .name）。"""
+        if hasattr(stage, "name"):
+            return getattr(stage, "name", str(stage))
+        return str(stage)
+
+    def check_permission(self, tool_name: str, role: str, stage: str) -> bool:
+        """
+        检查当前角色在当前阶段是否有权调用该工具。
+        未在 TOOL_PERMISSIONS 中配置的工具默认允许所有角色和阶段。
+        stage 为空字符串时不按阶段过滤（视为允许）。
+        """
+        stage_str = self._normalize_stage(stage)
+        if tool_name not in TOOL_PERMISSIONS:
+            return True
+        perm = TOOL_PERMISSIONS[tool_name]
+        allowed_roles = perm.get("allowed_roles") or []
+        allowed_stages = perm.get("allowed_stages") or []
+        if allowed_roles and role not in allowed_roles:
+            return False
+        if allowed_stages and stage_str and stage_str not in allowed_stages:
+            return False
+        return True
+
+    def get_available_tools(self, role: str, stage: str) -> List[ToolMetadata]:
+        """
+        返回当前角色在当前阶段可用的工具列表（含元数据）。
+        仅包含已注册且具有元数据的工具，且通过 check_permission 检查。
+        """
+        stage_str = self._normalize_stage(stage)
+        out: List[ToolMetadata] = []
+        for tool_name in self.registered_tools:
+            if not self.check_permission(tool_name, role, stage_str):
+                continue
+            if not self.can_execute(role, tool_name):
+                continue
+            meta = self.tool_metadata.get(tool_name)
+            if meta is not None:
+                out.append(meta)
+        return out
+
+    def update_context(self, state: Optional[AppState] = None, role: Optional[str] = None, **kwargs: Any) -> None:
+        """更新当前上下文（仅 state/role，供权限与推荐用）。可传 context 对象：update_context(context=obj)。"""
+        if "context" in kwargs:
+            ctx = kwargs["context"]
+            state = getattr(ctx, "current_state", state)
+            role = getattr(ctx, "current_role", role)
+        self._current_state = state
+        self._current_role = role
+        if state is not None or role is not None:
+            self.logger.debug("上下文更新: state=%s, role=%s", state, role)
+
+    def _log_tool_execution(
+        self,
+        tool_name: str,
+        caller_role: str,
+        stage: str,
+        input_summary: str,
+        output_summary: str,
+        duration_ms: float,
+        success: bool,
+        error: str = "",
+    ) -> None:
+        """写入一条工具执行的结构化日志。"""
+        log_entry = {
+            "tool_name": tool_name,
+            "caller": caller_role,
+            "stage": stage,
+            "input_summary": input_summary[:200],
+            "output_summary": output_summary[:200],
+            "duration_ms": round(duration_ms, 2),
+            "success": success,
+            "error": error,
+            "timestamp": datetime.now().isoformat(),
+        }
+        self._execution_logs.append(log_entry)
+
+    def get_execution_logs(self, session_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        返回执行日志列表。若传入 session_id 则仅返回该会话的日志；
+        当前实现未在日志中写入 session_id，故 session_id 非空时返回空列表，可后续扩展。
+        """
+        if session_id is not None:
+            return [e for e in self._execution_logs if e.get("session_id") == session_id]
+        return list(self._execution_logs)
+
+    def get_execution_stats(self) -> Dict[str, Any]:
+        """
+        返回执行统计：total_calls, success_rate, avg_duration_ms, most_used_tools。
+        """
+        logs = self._execution_logs
+        total = len(logs)
+        if total == 0:
+            return {
+                "total_calls": 0,
+                "success_rate": 0.0,
+                "avg_duration_ms": 0.0,
+                "most_used_tools": [],
+            }
+        success_count = sum(1 for e in logs if e.get("success"))
+        durations = [e.get("duration_ms", 0) for e in logs]
+        avg_duration = sum(durations) / len(durations) if durations else 0.0
+        tool_counts = Counter(e.get("tool_name", "") for e in logs)
+        most_used = [{"tool_name": name, "count": count} for name, count in tool_counts.most_common(10)]
+        return {
+            "total_calls": total,
+            "success_rate": success_count / total,
+            "avg_duration_ms": round(avg_duration, 2),
+            "most_used_tools": most_used,
         }
 
-        # 初始化工具分类映射
-        self._init_tool_category_mappings()
+    def _get_tool_timeout_config(self, tool_name: str) -> Tuple[float, int]:
+        """返回 (timeout_秒, max_retries)。"""
+        overrides = TOOL_CONFIG.get("overrides") or {}
+        cfg = overrides.get(tool_name, {})
+        timeout = cfg.get("timeout", TOOL_CONFIG.get("default_timeout", 30))
+        max_retries = cfg.get("max_retries", TOOL_CONFIG.get("default_max_retries", 0))
+        return float(timeout), int(max_retries)
 
-    def _init_tool_category_mappings(self):
-        """初始化工具分类映射"""
-        # 状态到工具分类的映射
-        self.state_to_categories: Dict[AppState, List[ToolCategory]] = {
-            AppState.GROUNDING: [ToolCategory.DOCUMENT_PROCESSING],
-            AppState.DEBATE: [ToolCategory.ARCHITECTURE, ToolCategory.UI_DESIGN],
-            AppState.PRODUCTION: [ToolCategory.CODE_GENERATION, ToolCategory.CODE_ANALYSIS],
-            AppState.VERIFICATION: [ToolCategory.TESTING, ToolCategory.SECURITY],
-            AppState.DELIVERY: [ToolCategory.DOCUMENT_PROCESSING, ToolCategory.UTILITY],
-        }
+    def _execute_tool_once(self, role: str, tool_name: str, args: Dict) -> Dict[str, Any]:
+        """单次执行：直接调用父类 execute_tool_safely，供线程池 + 超时使用。"""
+        return ToolSecurityManager.execute_tool_safely(self, role, tool_name, args)
 
-        # 角色到工具分类的映射
-        self.role_to_categories: Dict[str, List[ToolCategory]] = {
-            "CKO": [ToolCategory.DOCUMENT_PROCESSING, ToolCategory.UTILITY],
-            "PM": [ToolCategory.ARCHITECTURE, ToolCategory.UTILITY],
-            "Arch": [ToolCategory.ARCHITECTURE, ToolCategory.CODE_ANALYSIS],
-            "Designer": [ToolCategory.UI_DESIGN, ToolCategory.DATA_VISUALIZATION],
-            "Coder": [ToolCategory.CODE_GENERATION, ToolCategory.CODE_ANALYSIS],
-            "Validator": [ToolCategory.TESTING, ToolCategory.SECURITY],
-            "QA": [ToolCategory.TESTING, ToolCategory.UTILITY],
-        }
+    def execute_tool_safely(self, role: str, tool_name: str, args: Dict) -> Dict[str, Any]:
+        """
+        安全执行工具：权限检查 → 超时 + 重试（ThreadPoolExecutor + future.result(timeout）→ 执行日志。
+        超时抛出 ToolTimeoutError；重试时每次失败 sleep 1 秒再试，并记录日志。
+        """
+        if self._current_state is not None:
+            if not self.check_permission(tool_name, role, self._current_state):
+                return {
+                    "success": False,
+                    "error": f"角色 '{role}' 在当前阶段无权调用工具 '{tool_name}'（权限矩阵限制）",
+                }
+            stage = self._normalize_stage(self._current_state)
+        else:
+            stage = ""
 
-        # 任务类别到工具分类的映射
-        self.task_to_categories: Dict[TaskCategory, List[ToolCategory]] = {
-            TaskCategory.SOFTWARE_DEV: [ToolCategory.CODE_GENERATION, ToolCategory.ARCHITECTURE,
-                                       ToolCategory.TESTING, ToolCategory.DEPENDENCY],
-            TaskCategory.DOCUMENTATION: [ToolCategory.DOCUMENT_PROCESSING],
-            TaskCategory.RESEARCH: [ToolCategory.DATA_VISUALIZATION, ToolCategory.UTILITY],
-            TaskCategory.DESIGN: [ToolCategory.UI_DESIGN, ToolCategory.DATA_VISUALIZATION],
-            TaskCategory.DATA_ANALYSIS: [ToolCategory.DATA_VISUALIZATION, ToolCategory.UTILITY],
-            TaskCategory.CODE_GENERATION: [ToolCategory.CODE_GENERATION, ToolCategory.CODE_ANALYSIS],
-            TaskCategory.TESTING: [ToolCategory.TESTING, ToolCategory.SECURITY],
-            TaskCategory.REVIEW: [ToolCategory.CODE_ANALYSIS, ToolCategory.ARCHITECTURE],
-        }
+        timeout_seconds, max_retries = self._get_tool_timeout_config(tool_name)
+        input_summary = str(args)[:200]
+        start = time.time()
+        last_result: Optional[Dict[str, Any]] = None
+        last_error: Optional[Exception] = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                future = self._executor.submit(self._execute_tool_once, role, tool_name, args)
+                last_result = future.result(timeout=timeout_seconds)
+                last_error = None
+                break
+            except FuturesTimeoutError:
+                last_error = ToolTimeoutError(tool_name, timeout_seconds)
+                self.logger.warning(
+                    "工具 %s 执行超时 (%.0fs)，重试 %d/%d",
+                    tool_name, timeout_seconds, attempt + 1, max_retries + 1,
+                )
+                if attempt < max_retries:
+                    time.sleep(1)
+                else:
+                    raise last_error
+            except Exception as e:
+                last_error = e
+                self.logger.warning(
+                    "工具 %s 执行异常: %s，重试 %d/%d",
+                    tool_name, e, attempt + 1, max_retries + 1,
+                )
+                if attempt < max_retries:
+                    time.sleep(1)
+                else:
+                    raise
+
+        duration_ms = (time.time() - start) * 1000
+        success = last_result.get("success", False) if last_result else False
+        output_summary = str(last_result.get("result", last_result.get("error", "")))[:200] if last_result else ""
+        err_msg = "" if success else (last_result.get("error", "") if last_result else str(last_error or ""))
+        self._log_tool_execution(
+            tool_name=tool_name,
+            caller_role=role,
+            stage=stage,
+            input_summary=input_summary,
+            output_summary=output_summary,
+            duration_ms=duration_ms,
+            success=success,
+            error=err_msg,
+        )
+        return last_result
 
     def register_tool_with_metadata(self,
                                    tool_name: str,
@@ -153,225 +359,37 @@ class GlobalToolManager(ToolSecurityManager):
             self.logger.info(f"已注册工具 '{tool_name}' (类别: {metadata.category.value})")
         return success
 
-    def update_context(self, context: ContextInfo):
-        """更新当前上下文信息"""
-        self.current_context = context
-        self.logger.debug(f"上下文更新: 状态={context.current_state}, 角色={context.current_role}, 任务={context.task_category}")
-
-    def recommend_tools(self,
-                       role: str = None,
-                       limit: int = 5,
-                       include_all_available: bool = False) -> List[Dict[str, Any]]:
+    def recommend_tools(self, role: str, stage: str, task_type: str = "") -> List[ToolMetadata]:
         """
-        基于当前上下文推荐工具
+        基于权限矩阵的简单推荐：返回角色在当前阶段可用的工具列表。
+        可选按 task_type 简单排序（SOFTWARE 时代码类工具靠前）。
+        """
+        available = self.get_available_tools(role, stage)
+        if task_type == "SOFTWARE":
+            code_cats = (ToolCategory.CODE_GENERATION, ToolCategory.CODE_ANALYSIS)
+            code_tools = [t for t in available if t.category in code_cats]
+            other_tools = [t for t in available if t.category not in code_cats]
+            return code_tools + other_tools
+        return available
+
+    def get_tool_schema_for_agent(
+        self, role: str, stage: Optional[str] = None, include_recommended_only: bool = True
+    ) -> List[Dict]:
+        """
+        为 Agent 获取工具 JSON Schema。
 
         Args:
-            role: 推荐给特定角色（默认使用当前上下文角色）
-            limit: 返回的工具数量限制
-            include_all_available: 是否包含所有可用工具（不仅仅是推荐工具）
-
-        Returns:
-            推荐工具列表，包含工具信息和推荐分数
+            role: Agent 角色
+            stage: 阶段（未传时使用 _current_state）；空字符串表示不按阶段过滤
+            include_recommended_only: 为 True 时仅包含 recommend_tools 返回的工具
         """
-        if not self.current_context:
-            self.logger.warning("上下文未设置，返回所有可用工具")
-            return self._get_all_available_tools(role, limit)
-
-        target_role = role or self.current_context.current_role
-        recommendations = []
-
-        for tool_name, tool_info in self.registered_tools.items():
-            # 检查权限
-            if not self.can_execute(target_role, tool_name):
-                continue
-
-            # 计算推荐分数
-            score = self._calculate_recommendation_score(tool_name, target_role)
-
-            # 获取工具元数据
-            metadata = self.tool_metadata.get(tool_name)
-
-            recommendations.append({
-                "name": tool_name,
-                "description": tool_info.get("description", ""),
-                "category": metadata.category.value if metadata else "unknown",
-                "permission_level": tool_info["permission_level"].value,
-                "allowed_roles": tool_info["allowed_roles"],
-                "recommendation_score": score,
-                "metadata": metadata.__dict__ if metadata else {},
-            })
-
-        # 按推荐分数排序
-        recommendations.sort(key=lambda x: x["recommendation_score"], reverse=True)
-
-        if include_all_available:
-            # 包含所有可用工具，但按推荐分数排序
-            return recommendations[:limit]
+        stage_str = self._normalize_stage(stage if stage is not None else self._current_state) if (stage is not None or self._current_state is not None) else ""
+        if include_recommended_only:
+            recommended = self.recommend_tools(role, stage_str, task_type="")
+            tool_names = [t.name for t in recommended]
         else:
-            # 只返回推荐分数较高的工具
-            filtered = [r for r in recommendations if r["recommendation_score"] > 0.3]
-            return filtered[:limit]
-
-    def _calculate_recommendation_score(self, tool_name: str, role: str) -> float:
-        """计算工具推荐分数"""
-        if not self.current_context:
-            return 0.5  # 默认分数
-
-        metadata = self.tool_metadata.get(tool_name)
-        if not metadata:
-            return 0.5
-
-        score = 0.0
-        weights = self.recommendation_weights
-
-        # 1. 类别匹配分数
-        category_score = self._calculate_category_match_score(metadata.category)
-        score += category_score * weights["category_match"]
-
-        # 2. 状态匹配分数
-        state_score = self._calculate_state_match_score(metadata.category)
-        score += state_score * weights["state_match"]
-
-        # 3. 角色匹配分数
-        role_score = self._calculate_role_match_score(metadata.category, role)
-        score += role_score * weights["role_match"]
-
-        # 4. 使用历史分数
-        usage_score = self._calculate_usage_score(metadata)
-        score += usage_score * weights["recent_usage"]
-
-        # 5. 成功率分数
-        success_score = self._calculate_success_rate_score(tool_name)
-        score += success_score * weights["success_rate"]
-
-        # 归一化到0-1范围
-        max_possible_score = sum(weights.values())
-        normalized_score = score / max_possible_score if max_possible_score > 0 else 0
-
-        return normalized_score
-
-    def _calculate_category_match_score(self, tool_category: ToolCategory) -> float:
-        """计算工具类别与任务类别的匹配分数"""
-        if not self.current_context or not self.current_context.task_category:
-            return 0.5
-
-        expected_categories = self.task_to_categories.get(self.current_context.task_category, [])
-        if tool_category in expected_categories:
-            return 1.0
-
-        # 检查相关类别
-        related_categories = self._get_related_categories(tool_category)
-        if any(cat in expected_categories for cat in related_categories):
-            return 0.7
-
-        return 0.3
-
-    def _calculate_state_match_score(self, tool_category: ToolCategory) -> float:
-        """计算工具类别与当前状态的匹配分数"""
-        if not self.current_context:
-            return 0.5
-
-        expected_categories = self.state_to_categories.get(self.current_context.current_state, [])
-        if tool_category in expected_categories:
-            return 1.0
-
-        return 0.3
-
-    def _calculate_role_match_score(self, tool_category: ToolCategory, role: str) -> float:
-        """计算工具类别与角色的匹配分数"""
-        expected_categories = self.role_to_categories.get(role, [])
-        if tool_category in expected_categories:
-            return 1.0
-
-        return 0.5
-
-    def _calculate_usage_score(self, metadata: ToolMetadata) -> float:
-        """计算使用历史分数（考虑使用次数和最近使用时间）"""
-        if metadata.usage_count == 0:
-            return 0.5  # 未使用过的工具给中等分数
-
-        # 基于使用次数的分数（使用越多，分数越高，但边际递减）
-        usage_factor = min(metadata.usage_count / 10, 1.0)
-        usage_score = 0.3 + 0.7 * usage_factor
-
-        # 基于最近使用时间的衰减
-        if metadata.last_used:
-            days_since_last_use = (datetime.now() - metadata.last_used).days
-            recency_factor = max(0, 1.0 - days_since_last_use / 30)  # 30天衰减周期
-            usage_score *= recency_factor
-
-        return usage_score
-
-    def _calculate_success_rate_score(self, tool_name: str) -> float:
-        """计算工具执行成功率分数"""
-        # 从执行历史中计算成功率
-        tool_executions = [e for e in self.execution_history if e.get("tool") == tool_name]
-        if not tool_executions:
-            return 0.7  # 没有历史记录，给中等分数
-
-        successful = sum(1 for e in tool_executions if e.get("success", False))
-        success_rate = successful / len(tool_executions)
-
-        # 有至少5次执行记录时，才完全信任成功率
-        confidence = min(len(tool_executions) / 5, 1.0)
-
-        return 0.3 + 0.7 * success_rate * confidence
-
-    def _get_related_categories(self, category: ToolCategory) -> List[ToolCategory]:
-        """获取相关工具类别"""
-        related_map = {
-            ToolCategory.CODE_GENERATION: [ToolCategory.CODE_ANALYSIS, ToolCategory.UTILITY],
-            ToolCategory.CODE_ANALYSIS: [ToolCategory.CODE_GENERATION, ToolCategory.TESTING],
-            ToolCategory.DOCUMENT_PROCESSING: [ToolCategory.UTILITY],
-            ToolCategory.DATA_VISUALIZATION: [ToolCategory.UI_DESIGN],
-            ToolCategory.UI_DESIGN: [ToolCategory.DATA_VISUALIZATION, ToolCategory.ARCHITECTURE],
-            ToolCategory.ARCHITECTURE: [ToolCategory.CODE_ANALYSIS, ToolCategory.DEPENDENCY],
-            ToolCategory.TESTING: [ToolCategory.SECURITY, ToolCategory.CODE_ANALYSIS],
-            ToolCategory.SECURITY: [ToolCategory.TESTING],
-            ToolCategory.DEPENDENCY: [ToolCategory.CODE_ANALYSIS],
-            ToolCategory.UTILITY: [ToolCategory.DOCUMENT_PROCESSING],
-        }
-        return related_map.get(category, [])
-
-    def _get_all_available_tools(self, role: str, limit: int) -> List[Dict[str, Any]]:
-        """获取所有可用的工具"""
-        tools = []
-        for tool_name, tool_info in self.registered_tools.items():
-            if not self.can_execute(role, tool_name):
-                continue
-
-            metadata = self.tool_metadata.get(tool_name)
-
-            tools.append({
-                "name": tool_name,
-                "description": tool_info.get("description", ""),
-                "category": metadata.category.value if metadata else "unknown",
-                "permission_level": tool_info["permission_level"].value,
-                "allowed_roles": tool_info["allowed_roles"],
-                "recommendation_score": 0.5,  # 默认分数
-                "metadata": metadata.__dict__ if metadata else {},
-            })
-
-        return tools[:limit]
-
-    def get_tool_schema_for_agent(self, role: str, include_recommended_only: bool = True) -> List[Dict]:
-        """
-        为Agent获取工具JSON Schema
-
-        Args:
-            role: Agent角色
-            include_recommended_only: 是否只包含推荐的工具
-
-        Returns:
-            工具JSON Schema列表
-        """
-        if include_recommended_only and self.current_context:
-            recommended = self.recommend_tools(role, limit=10, include_all_available=False)
-            tool_names = [r["name"] for r in recommended]
-        else:
-            # 获取所有有权限的工具
-            tool_names = [name for name in self.registered_tools.keys()
-                         if self.can_execute(role, name)]
+            available = self.get_available_tools(role, stage_str if stage_str else "")
+            tool_names = [t.name for t in available]
 
         # 转换为JSON Schema格式
         tools_schema = []

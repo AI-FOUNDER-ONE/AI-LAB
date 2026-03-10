@@ -5,6 +5,7 @@ config.py - AI-Lab-Commander 全局配置
 """
 
 import os
+from enum import Enum
 from dotenv import load_dotenv
 
 # ---------- 加载环境变量 ----------
@@ -49,16 +50,16 @@ AGENT_PROFILES = {
     "System":   {"name": "System",   "color": "#8B949E", "icon": "⚙️"},
 }
 
-# ---------- 状态机阶段定义 ----------
-class AppState:
+# ---------- 状态机阶段定义（真枚举；枚举值保持原字符串不变）----------
+class AppState(str, Enum):
     """状态机阶段枚举"""
-    IDLE         = "IDLE"           # 空闲状态
-    GROUNDING    = "GROUNDING"      # CKO 需求打磨阶段
-    DEBATE       = "DEBATE"         # PM/Arch/Designer 方案博弈阶段
-    PRODUCTION   = "PRODUCTION"     # Coder 编码阶段
-    VERIFICATION = "VERIFICATION"   # Validator 验证阶段
-    DELIVERY     = "DELIVERY"       # 交付汇总阶段
-    COMPLETED    = "COMPLETED"      # 任务完成
+    IDLE         = "空闲"
+    GROUNDING    = "需求打磨"       # CKO 与用户深度访谈
+    DEBATE       = "方案博弈"       # PM/Arch/Designer 讨论
+    PRODUCTION   = "执行阶段"       # Coder 编码
+    VERIFICATION = "验证阶段"       # Validator 验证
+    DELIVERY     = "交付汇总"       # 打包成果
+    COMPLETED    = "任务完成"
 
 # ---------- 路径配置 ----------
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -66,11 +67,13 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 SESSIONS_DIR = os.path.join(DATA_DIR, "sessions")
 KNOWLEDGE_DIR = os.path.join(DATA_DIR, "knowledge")
 GENERATED_DOCS_DIR = os.path.join(DATA_DIR, "generated_docs")
+WORKSPACE_ROOT = os.path.join(DATA_DIR, "workspace")  # 各项目独立目录的父目录 data/workspace/{session_id}/
 
 # 确保数据目录存在
 os.makedirs(SESSIONS_DIR, exist_ok=True)
 os.makedirs(KNOWLEDGE_DIR, exist_ok=True)
 os.makedirs(GENERATED_DOCS_DIR, exist_ok=True)
+os.makedirs(WORKSPACE_ROOT, exist_ok=True)
 
 # ---------- UI 全局常量 ----------
 APP_TITLE = "AI-Lab-Commander · AI 多角色协作平台"
@@ -80,7 +83,15 @@ FONT_FAMILY = "Microsoft YaHei UI"
 FONT_SIZE_BASE = 12
 
 # ---------- 逻辑控制 ----------
-MAX_DEBATE_ROUNDS = 999  # 最大博弈交互轮次 (解除限制)
+MAX_DEBATE_ROUNDS = 15  # 最大博弈交互轮次
+
+# 按阶段分配轮次预算。到达预算上限时应请求用户决策（继续/收敛/终止），而非硬性停止。
+MAX_ROUNDS_PER_STAGE = {
+    "GROUNDING": 10,
+    "DEBATE": 15,
+    "PRODUCTION": 20,
+    "VERIFICATION": 10,
+}
 
 
 # ---------- 配置验证函数 ----------

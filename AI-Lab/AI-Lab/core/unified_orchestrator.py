@@ -20,6 +20,7 @@ unified_orchestrator.py - 统一多智能体编排引擎（全新设计）
 - StateGuidanceEngine: 状态引导引擎（状态机 + 事件驱动）
 """
 
+import os
 import traceback
 import re
 import json
@@ -41,427 +42,13 @@ from core.state_controller import StateController
 from core.session_store import SessionStore
 from core.global_tool_manager import GlobalToolManager
 from core.tool_security import ToolPermission, ToolSecurityManager
+from core.context import MessageIntent, Message, EnhancedConversationContext
+from core.router import SmartRouter
+from core.consensus import ConsensusEngine
 from config import AppState, MAX_DEBATE_ROUNDS
 
 # ==============================================================================
-# 1. 增强上下文管理
-# ==============================================================================
-
-class MessageIntent(Enum):
-    """消息意图分类"""
-    STATEMENT = "statement"      # 陈述观点
-    QUESTION = "question"        # 提出问题
-    CRITIQUE = "critique"        # 批评建议
-    AGREEMENT = "agreement"      # 同意支持
-    COMMAND = "command"          # 指令命令
-    DECISION = "decision"        # 决策裁决
-    PROPOSAL = "proposal"        # 方案提议
-    CLARIFICATION = "clarification"  # 澄清说明
-
-class Message:
-    """增强的消息对象，支持情感分析和意图识别"""
-    def __init__(self, role: str, content: str, intent: MessageIntent = MessageIntent.STATEMENT):
-        self.role = role
-        self.content = content
-        self.intent = intent
-        self.timestamp = time.time()  # 真实时间戳
-        self.mentions: List[str] = self._extract_mentions(content)
-        self.emotion_score: float = 0.0  # 情感分数 (-1.0 到 1.0)
-        self.confidence_score: float = 1.0  # 置信度分数
-
-    def _extract_mentions(self, text: str) -> List[str]:
-        """提取@提及的角色"""
-        return re.findall(r"@(\w+)", text)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """转换为字典，便于序列化"""
-        return {
-            "role": self.role,
-            "content": self.content,
-            "intent": self.intent.value,
-            "timestamp": self.timestamp,
-            "mentions": self.mentions,
-            "emotion_score": self.emotion_score,
-            "confidence_score": self.confidence_score
-        }
-
-class EnhancedConversationContext:
-    """增强的对话上下文管理
-
-    支持：
-    - 情感分析追踪
-    - 意图识别
-    - 共识度计算
-    - 话题追踪
-    """
-
-    def __init__(self):
-        self.history: List[Message] = []
-        self.artifacts: Dict[str, Any] = {}  # 共享文档/代码
-        self.mission_protocol: Dict[str, Any] = {}  # 结构化任务书
-        self.task_type: str = "SOFTWARE"  # 任务类型
-        self.current_topic: str = ""  # 当前讨论话题
-        self.consensus_level: float = 0.0  # 共识度 (0.0-1.0)
-
-    def add_message(self, role: str, content: str, intent: MessageIntent = MessageIntent.STATEMENT) -> Message:
-        """添加消息到历史记录"""
-        msg = Message(role, content, intent)
-        self.history.append(msg)
-
-        # 更新共识度（简化实现）
-        self._update_consensus_level()
-
-        return msg
-
-    def get_recent_history(self, limit: int = 10) -> str:
-        """获取最近的历史记录（用于LLM上下文）"""
-        lines = []
-        for msg in self.history[-limit:]:
-            lines.append(f"{msg.role}: {msg.content}")
-        return "\n".join(lines)
-
-    def get_messages_by_role(self, role: str, limit: int = 5) -> List[Message]:
-        """获取特定角色的消息"""
-        return [msg for msg in self.history if msg.role == role][-limit:]
-
-    def get_last_message(self) -> Optional[Message]:
-        """获取最后一条消息"""
-        return self.history[-1] if self.history else None
-
-    def get_messages_by_intent(self, intent: MessageIntent, limit: int = 5) -> List[Message]:
-        """获取特定意图的消息"""
-        return [msg for msg in self.history if msg.intent == intent][-limit:]
-
-    def _update_consensus_level(self):
-        """更新共识度（简化实现）"""
-        if len(self.history) < 2:
-            self.consensus_level = 0.0
-            return
-
-        # 简化的共识度计算：基于最近消息中的关键词
-        recent_msgs = self.history[-5:] if len(self.history) >= 5 else self.history
-        agreement_keywords = ["同意", "赞同", "支持", "批准", "通过", "✅", "👍"]
-        disagreement_keywords = ["反对", "不同意", "拒绝", "驳回", "❌", "👎"]
-
-        agreement_count = 0
-        disagreement_count = 0
-
-        for msg in recent_msgs:
-            content_lower = msg.content.lower()
-            if any(keyword in content_lower for keyword in agreement_keywords):
-                agreement_count += 1
-            if any(keyword in content_lower for keyword in disagreement_keywords):
-                disagreement_count += 1
-
-        total = agreement_count + disagreement_count
-        if total > 0:
-            self.consensus_level = agreement_count / total
-        else:
-            self.consensus_level = 0.5  # 中性
-
-# ==============================================================================
-# 2. 智能路由引擎
-# ==============================================================================
-
-class RoutingStrategy(Enum):
-    """路由策略"""
-    EXPLICIT_MENTION = "explicit_mention"      # @提及优先级
-    STRUCTURED_COMMAND = "structured_command"  # 结构化命令 (NEXT_SPEAKER:)
-    INTENT_ANALYSIS = "intent_analysis"        # 意图分析
-    STAGE_DEFAULT = "stage_default"            # 阶段默认路由
-    USER_PREFERENCE = "user_preference"        # 用户偏好
-    CONSENSUS_BASED = "consensus_based"        # 基于共识
-
-class SmartRouter:
-    """智能路由引擎：多策略决策"""
-
-    def __init__(self, context: EnhancedConversationContext):
-        self.context = context
-        self.participants = ["CKO", "PM", "Arch", "Designer", "Coder", "Validator"]
-        self.routing_history: List[Tuple[str, str, RoutingStrategy]] = []  # (from_role, to_role, strategy)
-
-    def decide_next_speaker(self, current_state: AppState) -> Optional[str]:
-        """决策下一发言者（多策略融合）"""
-        last_msg = self.context.get_last_message()
-        if not last_msg:
-            return "PM"  # 默认起始
-
-        # 收集所有策略的建议
-        strategies = [
-            (self._explicit_mention, RoutingStrategy.EXPLICIT_MENTION),
-            (self._structured_command, RoutingStrategy.STRUCTURED_COMMAND),
-            (self._intent_analysis, RoutingStrategy.INTENT_ANALYSIS),
-            (self._stage_default, RoutingStrategy.STAGE_DEFAULT),
-            (self._consensus_based, RoutingStrategy.CONSENSUS_BASED),
-        ]
-
-        candidates: Dict[str, int] = {}  # 角色 -> 得分
-
-        for strategy_func, strategy_type in strategies:
-            result = strategy_func(last_msg, current_state)
-            if result:
-                if result not in candidates:
-                    candidates[result] = 0
-                candidates[result] += 1  # 简单计分
-
-        # 选择得分最高的角色
-        if candidates:
-            selected = max(candidates.items(), key=lambda x: x[1])[0]
-
-            # 防止死循环：检查最近路由历史
-            recent_routes = [r[1] for r in self.routing_history[-3:]]  # 最近3次路由目标
-            if selected in recent_routes and len(recent_routes) >= 3:
-                # 尝试选择第二高的角色
-                sorted_candidates = sorted(candidates.items(), key=lambda x: x[1], reverse=True)
-                if len(sorted_candidates) > 1:
-                    selected = sorted_candidates[1][0]
-
-            # 记录路由决策
-            strategy_used = self._determine_strategy(selected, strategies, last_msg, current_state)
-            self.routing_history.append((last_msg.role, selected, strategy_used))
-
-            return selected
-
-        return None
-
-    def _explicit_mention(self, last_msg: Message, current_state: AppState) -> Optional[str]:
-        """策略1：显式@提及"""
-        if last_msg.mentions:
-            for mention in last_msg.mentions:
-                for p in self.participants:
-                    if p.lower() == mention.lower():
-                        # 防乒乓：不将发言权交回给刚发言的人
-                        if p != last_msg.role:
-                            return p
-        return None
-
-    def _structured_command(self, last_msg: Message, current_state: AppState) -> Optional[str]:
-        """策略2：结构化命令（NEXT_SPEAKER:）"""
-        import re
-        match = re.search(r'NEXT_SPEAKER:\s*([A-Za-z]+)', last_msg.content, re.IGNORECASE)
-        if match:
-            target = match.group(1).strip()
-            for p in self.participants:
-                if p.lower() == target.lower():
-                    if p != last_msg.role:
-                        return p
-        return None
-
-    def _intent_analysis(self, last_msg: Message, current_state: AppState) -> Optional[str]:
-        """策略3：意图分析"""
-        content_lower = last_msg.content.lower()
-
-        # 问题意图：通常需要专家回答
-        if "?" in last_msg.content or any(word in content_lower for word in ["如何", "怎么", "为什么", "请问"]):
-            # 根据关键词决定专家
-            if any(word in content_lower for word in ["架构", "设计", "系统", "数据库"]):
-                return "Arch"
-            elif any(word in content_lower for word in ["界面", "UI", "UX", "设计", "样式"]):
-                return "Designer"
-            elif any(word in content_lower for word in ["代码", "实现", "bug", "错误", "修复"]):
-                return "Coder"
-            elif any(word in content_lower for word in ["测试", "验证", "质量"]):
-                return "Validator"
-            elif any(word in content_lower for word in ["需求", "任务", "范围", "计划"]):
-                return "PM"
-
-        # 决策意图：需要PM或CKO
-        if any(word in content_lower for word in ["决定", "决策", "批准", "否决", "终审"]):
-            if current_state == AppState.DEBATE:
-                return "PM"
-            else:
-                return "CKO"
-
-        return None
-
-    def _stage_default(self, last_msg: Message, current_state: AppState) -> Optional[str]:
-        """策略4：阶段默认路由"""
-        task_type = self.context.task_type
-
-        if current_state == AppState.GROUNDING:
-            if last_msg.role == "Commander":
-                return "CKO"
-            elif last_msg.role == "CKO":
-                return "PM"
-            return None
-
-        elif current_state == AppState.DEBATE:
-            # 基于任务类型的默认辩论顺序
-            if task_type == "RESEARCH":
-                if last_msg.role == "PM": return "CKO"
-                if last_msg.role == "CKO": return "Arch"
-                if last_msg.role == "Arch": return "Validator"
-                return "PM"
-            elif task_type == "DESIGN":
-                if last_msg.role == "PM": return "Designer"
-                if last_msg.role == "Designer": return "Arch"
-                if last_msg.role == "Arch": return "PM"
-                return "PM"
-            else:  # SOFTWARE
-                if last_msg.role == "PM": return "Arch"
-                if last_msg.role == "Arch": return "Designer"
-                if last_msg.role == "Designer": return "PM"
-                return "PM"
-
-        elif current_state == AppState.PRODUCTION:
-            if last_msg.role == "PM": return "Coder"
-            if last_msg.role == "Coder": return "Validator"
-            if last_msg.role == "Validator":
-                if "FAIL" in last_msg.content or "❌" in last_msg.content:
-                    return "Coder"
-                else:
-                    return "PM"
-            return "PM"
-
-        elif current_state == AppState.VERIFICATION:
-            if last_msg.role == "Validator": return "CKO"
-            if last_msg.role == "CKO": return "PM"
-            return "Validator"
-
-        return "PM"  # 默认回退
-
-    def _consensus_based(self, last_msg: Message, current_state: AppState) -> Optional[str]:
-        """策略5：基于共识的路由"""
-        # 当共识度高时，推进流程；共识度低时，引入更多角色
-        consensus = self.context.consensus_level
-
-        if current_state == AppState.DEBATE:
-            if consensus > 0.7:  # 高共识，推进到PM决策
-                if last_msg.role != "PM":
-                    return "PM"
-            elif consensus < 0.3:  # 低共识，引入更多专家
-                # 检查哪些角色最近没有发言
-                recent_roles = [msg.role for msg in self.context.history[-5:]]
-                for role in ["Arch", "Designer", "CKO"]:
-                    if role not in recent_roles:
-                        return role
-
-        return None
-
-    def _determine_strategy(self, selected_role: str, strategies: List,
-                           last_msg: Message, current_state: AppState) -> RoutingStrategy:
-        """确定实际使用的策略"""
-        for strategy_func, strategy_type in strategies:
-            result = strategy_func(last_msg, current_state)
-            if result == selected_role:
-                return strategy_type
-        return RoutingStrategy.STAGE_DEFAULT  # 默认
-
-# ==============================================================================
-# 3. 共识形成引擎
-# ==============================================================================
-
-class ConsensusEngine:
-    """共识形成引擎：支持投票、辩论总结、妥协方案"""
-
-    def __init__(self, context: EnhancedConversationContext):
-        self.context = context
-        self.vote_records: Dict[str, Dict[str, str]] = {}  # 议题 -> {角色 -> 立场}
-        self.debate_summaries: Dict[str, str] = {}  # 议题 -> 总结
-
-    def initiate_vote(self, topic: str, options: List[str]) -> Dict[str, Dict[str, str]]:
-        """发起投票"""
-        self.vote_records[topic] = {}
-        return self.vote_records[topic]
-
-    def cast_vote(self, topic: str, role: str, choice: str) -> bool:
-        """角色投票"""
-        if topic not in self.vote_records:
-            return False
-        self.vote_records[topic][role] = choice
-        return True
-
-    def get_vote_result(self, topic: str) -> Dict[str, Any]:
-        """获取投票结果"""
-        if topic not in self.vote_records:
-            return {"status": "no_vote", "result": None}
-
-        votes = self.vote_records[topic]
-        if not votes:
-            return {"status": "empty", "result": None}
-
-        # 统计票数
-        from collections import Counter
-        counter = Counter(votes.values())
-        most_common = counter.most_common(1)
-
-        if most_common:
-            winning_choice, count = most_common[0]
-            total = len(votes)
-            return {
-                "status": "completed",
-                "winning_choice": winning_choice,
-                "votes": dict(votes),
-                "count": count,
-                "total": total,
-                "percentage": count / total if total > 0 else 0
-            }
-
-        return {"status": "error", "result": None}
-
-    def summarize_debate(self, topic: str, messages: List[Message]) -> str:
-        """总结辩论要点"""
-        # 提取关键观点
-        key_points = []
-        disagreements = []
-        agreements = []
-
-        for msg in messages:
-            if msg.intent == MessageIntent.PROPOSAL:
-                key_points.append(f"{msg.role}: {msg.content[:100]}...")
-            elif msg.intent == MessageIntent.CRITIQUE:
-                disagreements.append(f"{msg.role}: {msg.content[:100]}...")
-            elif msg.intent == MessageIntent.AGREEMENT:
-                agreements.append(f"{msg.role}: {msg.content[:100]}...")
-
-        summary = f"# 辩论总结: {topic}\n\n"
-        summary += f"## 关键观点 ({len(key_points)}个)\n"
-        for point in key_points:
-            summary += f"- {point}\n"
-
-        summary += f"\n## 分歧点 ({len(disagreements)}个)\n"
-        for point in disagreements:
-            summary += f"- {point}\n"
-
-        summary += f"\n## 共识点 ({len(agreements)}个)\n"
-        for point in agreements:
-            summary += f"- {point}\n"
-
-        self.debate_summaries[topic] = summary
-        return summary
-
-    def generate_compromise(self, topic: str, conflicting_positions: Dict[str, str]) -> str:
-        """生成妥协方案"""
-        # 简化的妥协方案生成
-        positions = list(conflicting_positions.values())
-        if len(positions) < 2:
-            return "无显著冲突，无需妥协方案"
-
-        # 提取共同关键词
-        all_words = []
-        for pos in positions:
-            words = set(re.findall(r'\w+', pos.lower()))
-            all_words.append(words)
-
-        # 查找共同关键词
-        common_words = set.intersection(*all_words) if all_words else set()
-
-        compromise = f"# 妥协方案: {topic}\n\n"
-        compromise += "## 分析\n"
-        compromise += f"- 涉及{len(positions)}种不同立场\n"
-        compromise += f"- 发现{len(common_words)}个共同关注点\n\n"
-
-        compromise += "## 建议方案\n"
-        if common_words:
-            compromise += "1. **基于共同关注点构建方案**: "
-            compromise += ", ".join(list(common_words)[:5]) + "\n"
-        compromise += "2. **分阶段实施**: 先实现共识部分，争议部分后续评估\n"
-        compromise += "3. **设置评估标准**: 明确成功指标，定期评审\n"
-
-        return compromise
-
-# ==============================================================================
-# 4. 工具安全管理器（框架）
+# 1. 工具安全管理器（框架）
 # ==============================================================================
 
 # class ToolPermission(Enum):
@@ -687,6 +274,7 @@ class UnifiedOrchestrator(QObject):
         self.ctx = EnhancedConversationContext()
         self.router = SmartRouter(self.ctx)
         self.consensus_engine = ConsensusEngine(self.ctx)
+        self.ctx.consensus_engine = self.consensus_engine  # 供 context 更新共识度
         self.tool_security = GlobalToolManager()
         self.session_store = SessionStore()
 
@@ -747,12 +335,13 @@ class UnifiedOrchestrator(QObject):
         self._next_turn_ready.emit()
 
     def send_to_cko(self, message: str):
-        """Bridge Panel入口（Grounding阶段）"""
-        # 确保在GROUNDING状态
+        """Bridge Panel入口（需求打磨阶段）"""
         if self.state_ctrl.current_state == AppState.IDLE:
             self.state_ctrl.transition_to(AppState.GROUNDING)
+        # 首次发话时创建会话与独立项目目录
+        if self.session_store.get_current_session() is None:
+            self.session_store.create_session(user_intent=(message[:200] or "首次对话"))
 
-        # 作为用户消息处理
         self.inject_user_message(message)
 
     def confirm_project(self):
@@ -766,14 +355,20 @@ class UnifiedOrchestrator(QObject):
 
         if last_cko_msg:
             try:
-                # 尝试提取JSON
                 match = re.search(r"```json(.*?)```", last_cko_msg, re.DOTALL)
                 protocol_str = match.group(1).strip() if match else last_cko_msg
                 self.ctx.mission_protocol = json.loads(protocol_str)
-                self.ctx.task_type = self.ctx.mission_protocol.get("task_type", "SOFTWARE").upper()
+                self.ctx.task_type = self.ctx.mission_protocol.get("task_type", "").strip().upper() or "SOFTWARE"
+                # 若 JSON 里写了非标准值，归一化
+                if self.ctx.task_type not in ("SOFTWARE", "ENGINEERING", "DESIGN", "RESEARCH"):
+                    self.ctx.task_type = self._infer_task_type(last_cko_msg)
             except Exception as e:
                 print(f"Protocol解析错误: {e}")
+                self.ctx.task_type = self._infer_task_type(last_cko_msg or "")
+            if not self.ctx.task_type:
                 self.ctx.task_type = "SOFTWARE"
+        else:
+            self.ctx.task_type = self._infer_task_type(self.ctx.get_recent_history(limit=5) or "")
 
         # 2. 更新Agent领域角色
         for role, agent in self.agents_map.items():
@@ -789,6 +384,22 @@ class UnifiedOrchestrator(QObject):
         self.agent_response.emit("System", sys_msg)
 
         # 5. 触发事件循环
+        QTimer.singleShot(1500, self._next_turn_ready.emit)
+
+    def request_rework(self, feedback: str):
+        """任务完成后用户不满意：根据反馈回到方案博弈重新评审"""
+        if self.state_ctrl.current_state != AppState.COMPLETED:
+            print("[UnifiedOrchestrator] request_rework 仅在任务完成状态下可用")
+            return
+        if not self.state_ctrl.transition_to(AppState.DEBATE):
+            self.error_occurred.emit("返工失败：无法回到方案博弈阶段")
+            return
+        sys_msg = "Commander 对交付结果不满意，要求团队根据以下反馈重新评审方案。"
+        self.ctx.add_message("System", sys_msg, MessageIntent.STATEMENT)
+        self.agent_response.emit("System", sys_msg)
+        self.ctx.add_message("Commander", feedback, MessageIntent.COMMAND)
+        self.session_store.append_meeting_log("Commander", feedback)
+        self.agent_response.emit("Commander", feedback)
         QTimer.singleShot(1500, self._next_turn_ready.emit)
 
     def new_session(self):
@@ -832,8 +443,8 @@ class UnifiedOrchestrator(QObject):
         """主事件循环：决定谁发言并执行"""
         current_state = self.state_ctrl.current_state
 
-        # 检查终止条件
-        if current_state in (AppState.IDLE, AppState.COMPLETED):
+        # 检查终止条件：IDLE/COMPLETED 不再继续；DELIVERY 为收尾阶段，不再安排下一人发言，避免任务完成后 AI 重复发言
+        if current_state in (AppState.IDLE, AppState.COMPLETED, AppState.DELIVERY):
             return
 
         # 安全检查：防止无限循环
@@ -850,25 +461,40 @@ class UnifiedOrchestrator(QObject):
             print(f"[UnifiedOrchestrator] 暂停自动流转，等待外部输入")
             return
 
-        # 2. 获取Agent并执行
+        # 2. 获取 Agent
         agent = self.agents_map.get(next_role)
         if not agent:
             print(f"错误: 未知角色 {next_role}")
             return
 
-        # 3. 准备上下文并执行
-        self._run_agent(agent, current_state)
+        # 3. Coder 前加短延迟，避免紧接上一角色后立刻请求导致 429
+        if next_role == "Coder":
+            QTimer.singleShot(2500, lambda: self._run_agent(agent, current_state))
+        else:
+            self._run_agent(agent, current_state)
 
     def _run_agent(self, agent: BaseAgent, current_state: AppState):
         """运行Agent"""
-        # 准备上下文
         recent_history = self.ctx.get_recent_history(limit=10)
+        workspace_dir = self.session_store.get_workspace_dir() or ""
 
-        # 构建提示（集成状态感知和纪律要求）
+        stage_name = getattr(current_state, "value", str(current_state))
+        stage_instruction = self._get_stage_instruction(agent.role, current_state, stage_name)
         prompt = (
             f"你是War Room讨论组中的{agent.role}。\n"
-            f"当前开发阶段: {current_state}\n"
-            f"任务类型: {self.ctx.task_type}\n\n"
+            f"【当前阶段】: {stage_name}\n"
+            f"【任务类型】: {self.ctx.task_type}\n\n"
+            f"{stage_instruction}\n\n"
+        )
+        if agent.role == "Coder" and workspace_dir:
+            prompt += (
+                f"【项目产出目录】: {os.path.abspath(workspace_dir)}\n"
+                f"请在此目录下按需搭建项目结构（如 src/、docs/、tests/）。"
+                f"每个代码块第一行用注释指定相对路径，例如：\n"
+                f"  // filename: src/main.py  或  # filename: docs/README.md\n"
+                f"系统会自动创建子目录并保存。\n\n"
+            )
+        prompt += (
             f"【核心纪律要求】:\n"
             f"1. 使用流利、自然的中文回复，避免机器翻译腔。\n"
             f"2. 禁止互相吹捧、客套废话或无意义的认同。\n"
@@ -887,6 +513,70 @@ class UnifiedOrchestrator(QObject):
 
         self._active_worker = worker
         worker.start()
+
+    def _get_stage_instruction(self, role: str, current_state: AppState, stage_name: str) -> str:
+        """按阶段与任务类型返回约束。只有 SOFTWARE 才以代码为主要产出；工程/科研/设计一律禁止往写代码方向走。"""
+        tt = (self.ctx.task_type or "SOFTWARE").upper()
+        only_software_code = (
+            "【项目产出形态】本项目任务类型为「SOFTWARE」，执行阶段可产出可执行代码。\n"
+        )
+        no_code_emphasis = {
+            "ENGINEERING": (
+                "【项目产出形态】本项目是**工程类**（工程方案/施工计划/机械结构/系统架构等），"
+                "产出应为**方案文档、图纸说明、计算书、风险评估报告**等，**不是软件代码**。\n"
+                "全程禁止以编写或展示代码为主要产出；讨论与交付均以文档、图纸、方案为主。若有人要求写代码，请引导回工程方案/图纸/计算。"
+            ),
+            "RESEARCH": (
+                "【项目产出形态】本项目是**科研类**（文献综述/实验设计/数据分析/调研报告等），"
+                "产出应为**综述、实验方案、数据分析计划、调研报告**等，**不是软件代码**。\n"
+                "全程禁止以编写代码为主要产出。若有人要求写代码，请引导回文献、方法、实验设计或报告。"
+            ),
+            "DESIGN": (
+                "【项目产出形态】本项目是**设计类**（工业设计/外观/UX/3D 概念等），"
+                "产出应为**设计说明、效果图描述、交互说明、模型概念**等，**不是软件代码**。\n"
+                "全程禁止以编写代码为主要产出。若有人要求写代码，请引导回设计稿、说明或原型描述。"
+            ),
+        }
+        task_instruction = only_software_code if tt == "SOFTWARE" else no_code_emphasis.get(tt, only_software_code)
+
+        if current_state == AppState.DEBATE:
+            stage = (
+                "【本阶段纪律】当前为「方案博弈」阶段，仅讨论方案、架构与设计。\n"
+                "禁止输出可执行代码或完整实现；可简要说明思路，不得输出可直接运行的代码块。\n"
+            )
+            if tt != "SOFTWARE":
+                stage += "本项目并非软件开发，请勿将讨论引向写代码。\n"
+            return task_instruction + stage
+        if current_state == AppState.PRODUCTION:
+            if role == "Coder":
+                if tt == "SOFTWARE":
+                    return (
+                        task_instruction
+                        + "【本阶段纪律】当前为「执行阶段」，请根据已定方案与 Mission Protocol 输出完整、可运行的代码或文档。\n"
+                    )
+                return (
+                    task_instruction
+                    + "【本阶段纪律】当前为「执行阶段」，你的产出应为**文档/方案/报告/图纸说明**等，**不要产出可执行代码**。请整理并输出工程方案/科研报告/设计说明等最终成果。\n"
+                )
+            return task_instruction + "【本阶段纪律】当前为「执行阶段」，请配合执行（补充说明或审查），不要输出大段代码。\n"
+        if current_state == AppState.VERIFICATION:
+            return task_instruction + "【本阶段纪律】当前为「验证阶段」，请基于验证结果做结论或修正建议。\n"
+        if current_state == AppState.GROUNDING:
+            return "【本阶段纪律】当前为「需求打磨」阶段（仅 CKO 与用户对话）；若你被意外调用，请简短说明身份后收尾。\n"
+        return task_instruction + "【本阶段纪律】请根据当前阶段与项目产出形态行事。\n"
+
+    def _infer_task_type(self, text: str) -> str:
+        """从 CKO/用户文案推断任务类型，避免一律落成 SOFTWARE。"""
+        if not text:
+            return "SOFTWARE"
+        t = text.lower()
+        if any(k in t for k in ["工程", "施工", "机械", "结构设计", "制造", "工艺", "设备", "engineering"]):
+            return "ENGINEERING"
+        if any(k in t for k in ["科研", "研究", "文献", "实验设计", "调研", "综述", "research"]):
+            return "RESEARCH"
+        if any(k in t for k in ["工业设计", "外观", "造型", "ui", "ux", "3d", "设计图", "design"]):
+            return "DESIGN"
+        return "SOFTWARE"
 
     def _on_agent_finished(self, role: str, content: str):
         """Agent回复处理"""
@@ -925,11 +615,15 @@ class UnifiedOrchestrator(QObject):
         if role == "Coder":
             self._handle_code_extraction(content)
 
-        # 4. 检查状态转换（基于决策意图）
-        if intent == MessageIntent.DECISION:
+        # 4. 检查状态转换：PM/CKO 的“交付/完成/通过”等必须每次都检查，否则会漏判导致未进入 DELIVERY、下一轮继续发言（重复对话）
+        if role in ("PM", "CKO"):
             self._check_state_transition(role, content)
 
-        # 5. 继续事件循环
+        # 5. 若已进入交付/完成阶段，不再调度下一轮
+        if self.state_ctrl.current_state in (AppState.DELIVERY, AppState.COMPLETED):
+            return
+
+        # 6. 继续事件循环
         QTimer.singleShot(1500, self._next_turn_ready.emit)
 
     def _handle_code_extraction(self, content: str):
@@ -947,8 +641,10 @@ class UnifiedOrchestrator(QObject):
             matches = list(re.finditer(r"```([a-zA-Z]*)\n(.*?)```", content, re.DOTALL))
 
             if matches:
-                workspace_dir = os.path.join("data", "workspace")
-                os.makedirs(workspace_dir, exist_ok=True)
+                workspace_dir = self.session_store.get_workspace_dir()
+                if not workspace_dir:
+                    workspace_dir = os.path.join("data", "workspace", "default")
+                    os.makedirs(workspace_dir, exist_ok=True)
 
                 saved_files = []
                 for i, match in enumerate(matches):
@@ -1009,22 +705,20 @@ class UnifiedOrchestrator(QObject):
                 "approve" in content_lower or "✅" in content):
                 if current_state == AppState.DEBATE:
                     self.state_ctrl.transition_to(AppState.PRODUCTION)
-                    self.agent_response.emit("System", "PM批准方案，进入生产阶段。")
+                    self.agent_response.emit("System", "PM 批准方案，进入执行阶段。")
 
             # PM交付
             elif ("交付" in content_lower or "发布" in content_lower or "完成" in content_lower or
                   "deliver" in content_lower or "🚀" in content):
                 if current_state == AppState.PRODUCTION or current_state == AppState.VERIFICATION:
-                    self.state_ctrl.transition_to(AppState.DELIVERY)
-                    self.agent_response.emit("System", "PM确认交付，进入交付阶段。")
+                    self._enter_delivery_and_complete("PM确认交付，进入交付阶段。")
 
         elif role == "CKO":
             # CKO审计通过
             if ("通过" in content_lower or "批准" in content_lower or "合格" in content_lower or
                 "pass" in content_lower or "✅" in content):
                 if current_state == AppState.VERIFICATION:
-                    self.state_ctrl.transition_to(AppState.DELIVERY)
-                    self.agent_response.emit("System", "CKO审计通过，准备交付。")
+                    self._enter_delivery_and_complete("CKO审计通过，准备交付。")
 
     def _run_audit(self, stage: str, context: str, callback):
         """运行 CKO 审计"""
@@ -1046,7 +740,7 @@ class UnifiedOrchestrator(QObject):
         worker.start()
 
     def _on_debate_audit_finished(self, result: str):
-        """DEBATE阶段审计完成处理"""
+        """方案博弈阶段审计完成处理"""
         if result.startswith("FAIL"):
             self.agent_response.emit("CKO", f"❌ [Vision Alert] 审计未通过: {result}")
             # 审计未通过，反馈给PM
@@ -1065,7 +759,7 @@ class UnifiedOrchestrator(QObject):
             self.agent_response.emit("System", "CKO审计通过，进入生产阶段。")
 
     def _on_verification_audit_finished(self, result: str):
-        """VERIFICATION阶段审计完成处理"""
+        """验证阶段审计完成处理"""
         if result.startswith("FAIL"):
             self.agent_response.emit("CKO", f"❌ [Vision Alert] 审计未通过: {result}")
             # 审计未通过，需要PM决策
@@ -1078,9 +772,20 @@ class UnifiedOrchestrator(QObject):
             self.agent_response.emit("CKO", outcome_msg)
         else:
             self.agent_response.emit("CKO", "✅ [Vision Keeper] 审计通过，准备交付 PM 验收。")
-            # 进入交付阶段
-            self.state_ctrl.transition_to(AppState.DELIVERY)
-            self.agent_response.emit("System", "CKO审计通过，进入交付阶段。")
+            self._enter_delivery_and_complete("CKO审计通过，进入交付阶段。")
+
+    def _enter_delivery_and_complete(self, system_message: str):
+        """进入交付阶段并在一小段延迟后标记为 COMPLETED，避免后续再触发下一轮发言。"""
+        if not self.state_ctrl.transition_to(AppState.DELIVERY):
+            return
+        self.agent_response.emit("System", system_message)
+        self.agent_response.emit("System", "🎉 项目交付完成！")
+        QTimer.singleShot(1500, self._finish_workflow)
+
+    def _finish_workflow(self):
+        """将状态置为 COMPLETED 并发出 workflow_completed 信号。"""
+        self.state_ctrl.transition_to(AppState.COMPLETED)
+        self.workflow_completed.emit()
 
 # ==============================================================================
 # 6. AgentWorker（重用V2实现）

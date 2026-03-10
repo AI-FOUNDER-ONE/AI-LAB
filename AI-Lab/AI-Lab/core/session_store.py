@@ -3,6 +3,7 @@ session_store.py - 会话数据持久化
 ==================================
 管理 JSON 格式的会话存储，支持创建、读取、更新和列举历史会话。
 存储路径: data/sessions/{timestamp}.json
+增量写入：修改仅置 dirty，2 秒防抖后统一 flush 全量写盘。
 """
 
 import os
@@ -10,7 +11,12 @@ import json
 from datetime import datetime
 from typing import Optional
 
-from config import SESSIONS_DIR
+from config import SESSIONS_DIR, WORKSPACE_ROOT
+
+try:
+    from PyQt6.QtCore import QTimer
+except ImportError:
+    QTimer = None
 
 
 class SessionStore:
@@ -18,6 +24,7 @@ class SessionStore:
 
     负责将每次任务协作的完整记录存储为 JSON 文件，
     包括用户意图、会议记录、最终代码和测试报告。
+    使用 dirty 标志 + 防抖 flush，减少全量写入频率。
     """
 
     def __init__(self):
@@ -25,6 +32,7 @@ class SessionStore:
         os.makedirs(SESSIONS_DIR, exist_ok=True)
         self._current_session = None
         self._current_path = None
+        self._dirty = False
 
     def create_session(self, user_intent: str = "") -> dict:
         """创建新会话
@@ -40,8 +48,13 @@ class SessionStore:
         filename = f"{session_id}.json"
         self._current_path = os.path.join(SESSIONS_DIR, filename)
 
+        # 本项目独立产出目录，AI 可在此下创建 src/、docs/ 等子结构
+        workspace_dir = os.path.join(WORKSPACE_ROOT, session_id)
+        os.makedirs(workspace_dir, exist_ok=True)
+
         self._current_session = {
             "session_id": session_id,
+            "workspace_dir": workspace_dir,
             "created_at": now.isoformat(),
             "updated_at": now.isoformat(),
             "user_intent": user_intent,
@@ -53,8 +66,21 @@ class SessionStore:
             "test_reports": [],
             "timeline_events": [],
         }
-        self._save()
+        self._dirty = True
+        self.flush()
         return self._current_session
+
+    def flush(self):
+        """将内存中的会话写入磁盘（若 dirty）。应用退出时应主动调用一次，确保未落盘改动被写入。"""
+        if not self._dirty:
+            return
+        self._save()
+        self._dirty = False
+
+    def _schedule_flush(self):
+        """防抖：2 秒后自动 flush"""
+        if QTimer is not None:
+            QTimer.singleShot(2000, self.flush)
 
     def update_session(self, **kwargs):
         """更新当前会话的字段
@@ -66,7 +92,8 @@ class SessionStore:
             return
         self._current_session["updated_at"] = datetime.now().isoformat()
         self._current_session.update(kwargs)
-        self._save()
+        self._dirty = True
+        self._schedule_flush()
 
     def append_cko_log(self, role: str, content: str):
         """追加 CKO 对话记录"""
@@ -77,7 +104,8 @@ class SessionStore:
             "role": role,
             "content": content,
         })
-        self._save()
+        self._dirty = True
+        self._schedule_flush()
 
     def append_meeting_log(self, role: str, content: str):
         """追加会议讨论记录"""
@@ -88,7 +116,8 @@ class SessionStore:
             "role": role,
             "content": content,
         })
-        self._save()
+        self._dirty = True
+        self._schedule_flush()
 
     def append_test_report(self, report: dict):
         """追加测试报告记录"""
@@ -96,7 +125,8 @@ class SessionStore:
             return
         report["timestamp"] = datetime.now().isoformat()
         self._current_session["test_reports"].append(report)
-        self._save()
+        self._dirty = True
+        self._schedule_flush()
 
     def append_timeline_event(self, state: str, description: str):
         """追加时间轴事件"""
@@ -107,11 +137,18 @@ class SessionStore:
             "state": state,
             "description": description,
         })
-        self._save()
+        self._dirty = True
+        self._schedule_flush()
 
     def get_current_session(self) -> Optional[dict]:
         """获取当前会话数据"""
         return self._current_session
+
+    def get_workspace_dir(self) -> Optional[str]:
+        """获取当前会话的项目产出目录（独立文件夹），无会话时返回 None"""
+        if self._current_session is None:
+            return None
+        return self._current_session.get("workspace_dir")
 
     def list_sessions(self) -> list:
         """列举所有历史会话
@@ -153,6 +190,12 @@ class SessionStore:
             with open(filepath, "r", encoding="utf-8") as f:
                 self._current_session = json.load(f)
                 self._current_path = filepath
+            # 兼容旧会话：补全 workspace_dir
+            sid = self._current_session.get("session_id")
+            if sid and not self._current_session.get("workspace_dir"):
+                workspace_dir = os.path.join(WORKSPACE_ROOT, sid)
+                os.makedirs(workspace_dir, exist_ok=True)
+                self._current_session["workspace_dir"] = workspace_dir
             return self._current_session
         except (json.JSONDecodeError, IOError) as e:
             print(f"[SessionStore] 加载会话失败: {e}")

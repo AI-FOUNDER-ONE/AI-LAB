@@ -5,6 +5,7 @@ import pytest
 from unittest.mock import Mock, patch, AsyncMock
 from PyQt6.QtCore import QCoreApplication
 
+# TODO: migrate to UnifiedOrchestrator
 from core.orchestrator import Orchestrator, AgentWorker, AuditWorker
 from core.state_controller import StateController
 from core.chat_history import ChatHistoryManager

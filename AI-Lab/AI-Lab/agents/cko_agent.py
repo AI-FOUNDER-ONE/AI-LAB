@@ -31,10 +31,10 @@ CKO_SYSTEM_PROMPT = """你是 AI-Lab-Commander 的 CKO（首席知识官），�
 4. 最终输出一份结构化的 Mission Protocol（任务书）
 
 工作风格：
-- **在需求阶段 (Grounding)**：像一位资深的学术导师，温和严谨地追问。
-- **在博弈阶段 (Debate)**：
+- **在需求打磨阶段**：像一位资深的学术导师，温和严谨地追问。
+- **在方案博弈阶段**：
   - **身份**：列席会议的"最高解释权"持有者。
-  - **被点名时**：当 PM 呼叫你 (`NEXT_SPEAKER: CKO`) 或用户干预时，请**明确澄清** Mission Protocol 的原意，裁决争议，或指出当前讨论的偏离点。
+  - **被点名时**：当 PM 呼叫你（`下一发言者: CKO`）或用户干预时，请**明确澄清** Mission Protocol 的原意，裁决争议，或指出当前讨论的偏离点。
   - **主动干预**：如果发现话题严重跑偏，必须严厉指出。
   - **发言风格**：言简意赅，直击要害，引用 Mission Protocol 的具体条款。
 - 使用中文沟通，专业术语保留英文
@@ -58,11 +58,13 @@ CKO_SYSTEM_PROMPT = """你是 AI-Lab-Commander 的 CKO（首席知识官），�
 }
 ```
 
-**关于 task_type 的严格分类**：
-- **SOFTWARE**: 软件开发、代码编写、脚本、算法实现。
-- **ENGINEERING**: 工程方案、施工计划、机械结构、风险评估、系统架构。
-- **DESIGN**: 工业设计、外观造型、平面设计、用户体验、3D建模概念。
+**关于 task_type 的严格分类（必须遵守）**：
+- **SOFTWARE**: 仅当用户明确要做「软件开发、写代码、脚本、算法实现」时使用。
+- **ENGINEERING**: 工程方案、施工计划、机械结构、结构设计、风险评估、系统架构（非软件代码）。
+- **DESIGN**: 工业设计、外观造型、平面设计、用户体验、3D 建模概念。
 - **RESEARCH**: 科学调研、文献综述、数据分析、趋势研究、实验设计。
+
+**重要**：若用户要做的是工程方案、科研课题、机械结构设计、设计稿等**非软件开发**，必须填 ENGINEERING / RESEARCH / DESIGN，**严禁误填 SOFTWARE**，否则后续环节会错误地往写代码方向走。
 """
 
 
@@ -100,11 +102,11 @@ class CKOAgent(BaseAgent):
             # RequirementsAnalyzerTool - 需求分析工具
             if RequirementsAnalyzerTool is not None:
                 requirements_analyzer = RequirementsAnalyzerTool()
-                def analyze_requirements(user_input: str, analysis_depth: str = "standard", domain_hint: str = "") -> str:
-                    """分析用户需求，生成结构化追问问题"""
+                def analyze_requirements(user_input: str, analysis_depth: str = "standard", domain_hint: str = ""):
+                    """分析用户需求，返回结构化需求 dict（goals/constraints/inputs/outputs/acceptance_criteria/dependencies/priority）"""
                     return requirements_analyzer._run(user_input=user_input, analysis_depth=analysis_depth, domain_hint=domain_hint)
                 self.register_tool(analyze_requirements, name="requirements_analyzer",
-                                 description="深度分析用户需求，生成结构化追问问题。输入用户需求描述、分析深度和领域提示，输出需要进一步澄清的问题列表。")
+                                 description="深度分析用户需求，生成结构化追问问题。输入用户需求描述、分析深度和领域提示，输出结构化需求（goals、constraints、inputs、outputs、acceptance_criteria、dependencies、priority）。")
             else:
                 print("[CKOAgent] RequirementsAnalyzerTool不可用，跳过注册")
 
@@ -129,11 +131,49 @@ class CKOAgent(BaseAgent):
         except Exception as e:
             print(f"[CKOAgent] 工具注册失败: {e}")
 
+        # checklist_tracker - 阶段交付物清单（与 Crew 工具解耦，始终尝试注册）
+        try:
+            from tools.checklist_tracker import checklist_tracker as _checklist_tracker
+            def checklist_tracker(action: str, stage: str = "", item: str = "") -> dict:
+                store = (self.parent().session_store if self.parent() and getattr(self.parent(), "session_store", None) else None)
+                return _checklist_tracker(action=action, stage=stage, item=item, session_store=store)
+            self.register_tool(
+                checklist_tracker,
+                name="checklist_tracker",
+                description="管理阶段交付物清单。action: create(创建阶段清单)、check(标记完成)、uncheck(标记未完成)、status(查看状态)、is_ready(检查是否可推进下一阶段)。stage: GROUNDING/DEBATE/PRODUCTION/VERIFICATION。"
+            )
+        except Exception as e:
+            print(f"[CKOAgent] checklist_tracker 注册失败: {e}")
+
+        # context_retriever - 从 meeting_logs 语义检索历史（session_store 闭包注入）
+        try:
+            from tools.context_retriever import context_retriever as _context_retriever
+            def context_retriever(query: str, max_results: int = 5) -> dict:
+                store = (self.parent().session_store if self.parent() and getattr(self.parent(), "session_store", None) else None)
+                return _context_retriever(query=query, session_store=store, max_results=max_results)
+            self.register_tool(
+                context_retriever,
+                name="context_retriever",
+                description="从当前会话的会议记录中检索与 query 最相关的历史消息。返回 results: [{speaker, content, timestamp, relevance}]。用于长对话中找回关键信息。"
+            )
+        except Exception as e:
+            print(f"[CKOAgent] context_retriever 注册失败: {e}")
+
+        # json_schema_validator - 校验 JSON 是否符合内置 Schema
+        try:
+            from tools.json_schema_validator import json_schema_validator
+            self.register_tool(
+                json_schema_validator,
+                name="json_schema_validator",
+                description="校验 JSON 字符串是否符合预定义 Schema。schema_name: mission_protocol / validation_report / delivery_summary。返回 valid、errors、parsed。"
+            )
+        except Exception as e:
+            print(f"[CKOAgent] json_schema_validator 注册失败: {e}")
+
     def _init_client(self):
-        """延迟初始化客户端"""
+        """延迟初始化客户端（Gemini/ZhipuAI 保留原逻辑，其余走工厂）"""
         if self._client is None:
             provider = self.model_config.get("provider", "gemini")
-            
             if provider == "gemini":
                 try:
                     import google.generativeai as genai
@@ -145,38 +185,6 @@ class CKOAgent(BaseAgent):
                         raise ValueError("GEMINI_API_KEY 未配置")
                 except ImportError:
                     raise ImportError("请安装 google-generativeai: pip install google-generativeai")
-
-            elif provider == "deepseek":
-                try:
-                    from openai import OpenAI
-                    api_key = API_KEYS.get("deepseek", "")
-                    if api_key:
-                        self._client = OpenAI(
-                            api_key=api_key,
-                            base_url="https://api.deepseek.com",
-                            max_retries=5,
-                        )
-                    else:
-                        raise ValueError("DEEPSEEK_API_KEY 未配置")
-                except ImportError:
-                    raise ImportError("请安装 openai: pip install openai")
-
-            elif provider == "novai":
-                try:
-                    from openai import OpenAI
-                    api_key = API_KEYS.get("novai", "")
-                    base_url = self.model_config.get("base_url", "https://once.novai.su/v1")
-                    if api_key:
-                        self._client = OpenAI(
-                            api_key=api_key,
-                            base_url=base_url,
-                            max_retries=5,
-                        )
-                    else:
-                        print("Warning: NOVAI_API_KEY not found.")
-                except ImportError:
-                    pass
-
             elif provider == "zhipuai":
                 try:
                     from zhipuai import ZhipuAI
@@ -187,21 +195,9 @@ class CKOAgent(BaseAgent):
                         raise ValueError("ZHIPUAI_API_KEY 未配置")
                 except ImportError:
                     raise ImportError("请安装 zhipuai: pip install zhipuai")
-
-            elif provider == "hiapi":
-                try:
-                    from openai import OpenAI
-                    api_key = API_KEYS.get("hiapi", "")
-                    if api_key:
-                        self._client = OpenAI(
-                            api_key=api_key,
-                            base_url="https://hiapi.online/v1",
-                            max_retries=5,
-                        )
-                    else:
-                        raise ValueError("HIAPI_API_KEY (used for CKO) 未配置")
-                except ImportError:
-                    raise ImportError("请安装 openai: pip install openai")
+            else:
+                from core.llm_client_factory import create_llm_client
+                self._client = create_llm_client(provider, self.model_config)
 
     def _parse_docx(self, path):
         """解析 Word 文档，提取文本和图片"""

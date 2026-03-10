@@ -2,17 +2,22 @@
 code_review_tool.py - 代码审查工具
 ===================================
 供 Coder（程序员）使用，对代码进行静态分析，提供审查建议。
+先尽力运行 pylint 获取拼写/未使用变量等问题，再结合 AST 审查，减少对 LLM token 的浪费。
 
 安全性审计:
   ✅ 仅使用ast模块进行静态分析，不执行代码
   ✅ 不读取代码以外的文件
   ✅ 输出结构化审查报告
+  ✅ pylint 非强依赖，未安装或超时则跳过
 """
 
 import ast
 import re
 import json
-from typing import Type, List, Dict, Any, Tuple
+import subprocess
+import tempfile
+import os
+from typing import Type, List, Dict, Any, Tuple, Optional
 from pydantic import BaseModel, Field
 
 # 尝试导入 crewai，如果失败则提供本地替代
@@ -95,11 +100,14 @@ class CodeReviewTool(BaseTool):
             # 1. 预处理代码
             cleaned_code = self._preprocess_code(code)
 
-            # 2. 执行审查
+            # 2. 静态分析前置（pylint，尽力而为）
+            static_issues = self._run_pylint(cleaned_code)
+
+            # 3. 执行 AST 审查
             review_results = self._perform_code_review(cleaned_code, review_focus)
 
-            # 3. 格式化输出
-            return self._format_report(code, review_results)
+            # 4. 格式化输出（合并静态分析与审查结果）
+            return self._format_report(code, review_results, static_issues=static_issues)
 
         except SyntaxError as e:
             return f"❌ 代码语法错误：{str(e)}"
@@ -117,6 +125,56 @@ class CodeReviewTool(BaseTool):
             if cleaned_line:  # 不添加空行
                 cleaned_lines.append(cleaned_line)
         return '\n'.join(cleaned_lines)
+
+    def _run_pylint(self, code: str) -> List[Dict[str, Any]]:
+        """尽力运行 pylint 获取静态问题（拼写、未使用变量等）。未安装或超时则返回 []。"""
+        fd, path = None, None
+        try:
+            fd, path = tempfile.mkstemp(suffix=".py", prefix="code_review_")
+            os.write(fd, code.encode("utf-8"))
+            os.close(fd)
+            fd = None
+            result = subprocess.run(
+                ["python", "-m", "pylint", "--output-format=json", path],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            out = (result.stdout or "").strip()
+            if not out:
+                return []
+            # Pylint may output a single JSON array or one JSON object per line
+            try:
+                data = json.loads(out)
+                if isinstance(data, list):
+                    return data
+                if isinstance(data, dict) and "messages" in data:
+                    return data["messages"]
+                return []
+            except json.JSONDecodeError:
+                lines = [line.strip() for line in out.split("\n") if line.strip()]
+                collected = []
+                for line in lines:
+                    try:
+                        obj = json.loads(line)
+                        if isinstance(obj, dict):
+                            collected.append(obj)
+                    except json.JSONDecodeError:
+                        continue
+                return collected
+        except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
+            return []
+        finally:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+            if path and os.path.exists(path):
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
 
     def _perform_code_review(self, code: str, review_focus: str) -> Dict[str, Any]:
         """执行代码审查"""
@@ -345,18 +403,44 @@ class CodeReviewTool(BaseTool):
 
         return suggestions
 
-    def _format_report(self, original_code: str, results: Dict[str, Any]) -> str:
-        """格式化审查报告"""
+    def _format_report(
+        self,
+        original_code: str,
+        results: Dict[str, Any],
+        static_issues: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
+        """格式化审查报告，合并静态分析（pylint）与 AST 审查结果。"""
+        static_issues = static_issues or []
         summary = results["summary"]
 
         report = f"""# 代码审查报告
 
 ## 审查摘要
 - **审查代码行数**: {summary['total_lines']}
-- **发现问题总数**: {summary['issues_found']}
+- **发现问题总数**: {summary['issues_found']}（AST）
+- **静态分析（pylint）**: {len(static_issues)} 条
 - **审查重点**: {summary['review_focus']}
 
 """
+
+        # 静态分析（pylint）前置，并提示 LLM/读者聚焦逻辑与安全
+        if static_issues:
+            report += """## 静态分析（pylint）已发现的问题
+
+以下是静态分析已发现的问题，请专注于逻辑错误、设计问题和安全风险；风格与未使用变量等已由上列覆盖。
+
+"""
+            for i, item in enumerate(static_issues[:50], 1):  # 最多展示 50 条
+                line = item.get("line") or item.get("line-number") or "?"
+                msg = item.get("message") or item.get("symbol") or str(item)
+                msg_id = item.get("message-id", "")
+                report += f"{i}. 第{line}行: {msg}"
+                if msg_id:
+                    report += f" [{msg_id}]"
+                report += "\n"
+            if len(static_issues) > 50:
+                report += f"... 其余 {len(static_issues) - 50} 条未展示\n"
+            report += "\n"
 
         # 安全问题
         if results["security_risks"]:
@@ -394,8 +478,9 @@ class CodeReviewTool(BaseTool):
             report += f"... 省略 {len(lines) - 20} 行\n"
         report += "```\n"
 
-        # 结构化数据（供程序处理）
-        report += f"\n## 📊 结构化数据（JSON）\n```json\n{json.dumps(results, ensure_ascii=False, indent=2)}\n```"
+        # 结构化数据（合并静态分析与 AST 审查，供程序处理）
+        merged = {**results, "static_issues": static_issues}
+        report += f"\n## 📊 结构化数据（JSON）\n```json\n{json.dumps(merged, ensure_ascii=False, indent=2)}\n```"
 
         return report
 

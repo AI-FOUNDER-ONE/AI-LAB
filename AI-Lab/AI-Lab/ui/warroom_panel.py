@@ -1,29 +1,43 @@
 """
-warroom_panel.py - 多路会议直播间 (The War Room)
-================================================
-中间面板：实时展示 PM、Arch、Designer 三角博弈的聊天气泡流。
-支持角色头像/身份标注、"正在输入..."状态显示。
+warroom_panel.py - 作战室（多角色讨论区）
+=========================================
+中间面板：实时展示 PM、Arch、Designer 等角色讨论的聊天气泡。
+支持角色头像、身份标注与「正在输入」状态。
 
-★ 消息展示策略:
-  - 自然语义对话: 直接完整展示
-  - 详细方案/审批内容: 缩略显示，点击按钮展开or折叠
-  - 系统事件: 居中小标签
+消息展示：短消息直接展示；长方案缩略显示，可点击展开或折叠；系统事件居中标签。
 """
 from PyQt6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel,
     QTextEdit, QSizePolicy, QScrollArea, QWidget,
-    QPushButton, QSplitter
+    QPushButton, QSplitter, QComboBox, QFileDialog,
+    QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtSignal
-from PyQt6.QtGui import QFont, QTextCursor
+from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QTimer, pyqtSignal, QEvent
+from PyQt6.QtGui import QFont, QTextCursor, QColor
 
 from ui.styles import COLORS, get_panel_style, get_button_style, get_audit_stamp_style, get_thinking_style, get_header_style, get_input_style
 from config import AGENT_PROFILES
+import math
 
 # ---------- 判断消息是否为"长内容"的阈值 ----------
 COLLAPSE_LINE_THRESHOLD = 6      # 超过 6 行视为长内容
 COLLAPSE_CHAR_THRESHOLD = 300    # 超过 300 字符视为长内容
 SUMMARY_MAX_CHARS = 120          # 摘要最多显示 120 字符
+# 流式时只显示「红框摘要」打字机，不显示蓝框折叠内容；结束后整体显示红框+蓝框
+def _streaming_summary_only(buffer: str) -> str:
+    """从流式 buffer 中取出仅用于展示的摘要（红框部分），不包含折叠的详细内容。"""
+    if not buffer.strip():
+        return ""
+    # 已有双换行：只显示第一段（摘要），不显示后续
+    if "\n\n" in buffer:
+        intro = buffer.split("\n\n", 1)[0].strip()
+        return intro
+    # 已有 Markdown 标题：只显示标题前的内容
+    lines = buffer.split("\n")
+    for i, line in enumerate(lines):
+        if line.strip().startswith(("# ", "## ", "### ")):
+            return "\n".join(lines[:i]).strip() or buffer[:SUMMARY_MAX_CHARS]
+    return buffer
 
 
 class CollapsibleMessage(QWidget):
@@ -49,93 +63,49 @@ class CollapsibleMessage(QWidget):
 
         is_user = (self._role == "Commander") or (self._role == "User")
         
-        # 1. Avatar
-        avatar = QLabel(self._profile["icon"])
-        avatar.setFixedSize(40, 40)
+        # 1. Avatar（Cursor 线稿风：灰底+浅灰图标，无彩色）
+        avatar_char = "U" if is_user else self._profile.get("icon", "◆")
+        avatar = QLabel(avatar_char)
+        avatar.setFixedSize(36, 36)
         avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # Use a safe color for avatar background if profile color is text color
-        bg_color = self._profile["color"]
-        if bg_color.startswith("#"):
-             pass
-        else:
-             bg_color = COLORS['accent_purple'] # Fallback
-             
         avatar.setStyleSheet(f"""
-            background-color: {bg_color};
-            color: white;
-            border-radius: 20px;
-            font-size: 20px;
-            font-family: 'Segoe UI Emoji';
+            background-color: {COLORS['bg_avatar']};
+            color: {COLORS['text_primary']};
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            border: none;
         """)
         
-        # 2. Bubble Container (Holds Name + Content)
+        # 2. 内容区（无气泡：透明底、无边框，用户与 AI 统一）
         self.bubble_container = QFrame()
         bubble_layout = QVBoxLayout(self.bubble_container)
-        bubble_layout.setContentsMargins(12, 8, 12, 8) # Compact: 16/12 -> 12/8
+        bubble_layout.setContentsMargins(8, 4, 8, 4)
         bubble_layout.setSpacing(4)
         
-        # Bubble Style
-        
-        # Bubble Style
-        from ui.styles import get_chat_bubble_css
-        # Determine strict colors for role
-        if is_user:
-            role_color = COLORS.get('accent_blue', '#58A6FF')
-        else:
-            role_color = COLORS['bg_secondary']
-            
-        # Use centralized style function
         self.bubble_style_sheet = f"""
             QFrame {{
-                {get_chat_bubble_css(role_color, is_user).replace("text-align", "qproperty-alignment").replace("margin", "qproperty-margin")}
+                background-color: transparent;
+                border: none;
             }}
             QLabel {{
                 background-color: transparent;
-                color: {'white' if is_user else COLORS['text_primary']};
-                font-family: 'Inter', sans-serif;
-                font-size: 13px;
-                line-height: 1.5;
-            }}
-        """
-        # Note: get_chat_bubble_css returns raw CSS properties (e.g. "background-color: ...;")
-        # We need to wrap them in QFrame { ... }
-        # Re-implementing specific QSS construction here to be safe and precise for QFrame
-        
-        # Bubble Style
-        if is_user:
-            bg = "#005FB8" # Windows/WeChat-ish Blue for User
-            text_color = "#FFFFFF"
-            radius = "12px 12px 2px 12px"
-            border = "none"
-        else:
-            bg = COLORS['bg_secondary'] # Consistency fix
-            text_color = COLORS['text_secondary']
-            radius = "12px 12px 12px 2px"
-            border = f"1px solid {COLORS['border']}"
-            
-        self.bubble_style_sheet = f"""
-            QFrame {{
-                background-color: {bg};
-                border: {border};
-                border-radius: {radius};
-            }}
-            QLabel {{
-                background-color: transparent;
-                color: {text_color};
-                font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+                color: {COLORS['text_primary']};
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
                 font-size: 13px;
                 line-height: 1.5;
             }}
         """
         self.bubble_container.setStyleSheet(self.bubble_style_sheet)
 
-        # 2.1 Name Label (High-End Polish)
+        # 2.1 角色名
         if not is_user:
             name_label = QLabel(self._profile["name"])
             name_label.setStyleSheet(f"""
-                color: {COLORS['text_secondary']};
+                color: {COLORS['text_tertiary']};
                 font-size: 10px;
-                font-weight: 700;
+                font-weight: 500;
                 text-transform: uppercase;
                 letter-spacing: 0.05em;
                 border: none;
@@ -144,19 +114,18 @@ class CollapsibleMessage(QWidget):
             """)
             bubble_layout.addWidget(name_label)
 
-        # 2.2 Content
+        # 2.2 正文
         intro, detail = self._split_content(self._content)
-        
         if intro:
             intro_label = QLabel(intro)
             intro_label.setWordWrap(True)
             bubble_layout.addWidget(intro_label)
 
-        # 2.3 Detail Button & Area
+        # 2.3 详情折叠区
         if detail:
            self._init_detail_ui(detail, bubble_layout, is_user)
 
-        # Assemble Main Layout
+        # 主布局
         if is_user:
             main_layout.addStretch()
             main_layout.addWidget(self.bubble_container)
@@ -170,34 +139,31 @@ class CollapsibleMessage(QWidget):
             main_layout.setAlignment(avatar, Qt.AlignmentFlag.AlignTop)
             main_layout.setAlignment(self.bubble_container, Qt.AlignmentFlag.AlignTop)
             
-        # Max width constraint for bubble
         self.bubble_container.setMaximumWidth(600)
 
     def _init_detail_ui(self, detail, layout, is_user):
-        """Initialize detail section"""
-        # Toggle Button
+        """初始化详情折叠区"""
         self.toggle_btn = QPushButton("📄 查看详细方案 ▼")
         self.toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.toggle_btn.setStyleSheet(f"""
             QPushButton {{
                 text-align: left;
-                background-color: rgba(255, 255, 255, 0.2);
-                color: {'#FFFFFF' if is_user else COLORS.get('accent_blue', '#58A6FF')};
-                border: None;
+                background-color: {COLORS['bg_tertiary']};
+                color: {COLORS['text_primary']};
+                border: none;
                 border-radius: 4px;
                 padding: 6px 12px;
                 font-size: 12px;
-                font-weight: bold;
+                font-weight: 500;
                 margin-top: 8px;
             }}
             QPushButton:hover {{
-                background-color: rgba(255, 255, 255, 0.3);
+                background-color: {COLORS['bg_avatar']};
             }}
         """)
         self.toggle_btn.clicked.connect(self._toggle_expand)
         layout.addWidget(self.toggle_btn)
 
-        # Detail Text
         self.detail_text = QTextEdit()
         self.detail_text.setReadOnly(True)
         self.detail_text.setHtml(self._format_content(detail))
@@ -240,14 +206,12 @@ class CollapsibleMessage(QWidget):
             # Save stamp for resize event
             self.audit_stamp = stamp
 
-            # 如果是 FAIL，给整个 bubble 加红色边框
+            # 如果是 FAIL，仅加左侧红线（无气泡时不再整框描边）
             if status == "FAIL":
-                # Append red border to existing style
-                fail_style = self.bubble_style_sheet.replace(
-                    f"border-radius: {self.radius};",
-                    f"border-radius: {self.radius}; border: 2px solid {COLORS['accent_red']};"
-                )
-                self.bubble_container.setStyleSheet(fail_style)
+                self.bubble_container.setStyleSheet(f"""
+                    QFrame {{ background-color: transparent; border: none; border-left: 3px solid {COLORS['accent_red']}; }}
+                    QLabel {{ background-color: transparent; color: {COLORS['text_primary']}; font-size: 13px; line-height: 1.5; }}
+                """)
 
     def resizeEvent(self, event):
         """处理大小调整"""
@@ -297,6 +261,16 @@ class CollapsibleMessage(QWidget):
             else:
                  intro = content[:SUMMARY_MAX_CHARS].replace('\n', ' ') + "..."
                  return intro, content
+        
+        # 多段落（含 \n\n）且长度足够：首段为摘要，其余为「详细方案」以便显示「查看详细方案」
+        if "\n\n" in content and len(content) > 100:
+            parts = content.split('\n\n', 1)
+            intro = parts[0].strip()
+            detail = parts[1].strip() if len(parts) > 1 else ""
+            if intro and detail:
+                return intro, "\n\n" + detail
+            if len(content) > SUMMARY_MAX_CHARS:
+                return content[:SUMMARY_MAX_CHARS].replace('\n', ' ') + "...", content
         
         # 短内容 → 全部作为前言，无详情
         return content, ""
@@ -427,7 +401,7 @@ class SystemEventLabel(QFrame):
             background-color: {COLORS['bg_secondary']};
             padding: 4px 16px;
             border-radius: 12px;
-            border: 1px solid {COLORS['border']};
+            border: 1px solid {COLORS['border_subtle']};
         """)
         layout.addStretch()
         layout.addWidget(label)
@@ -441,17 +415,24 @@ class WarRoomPanel(QFrame):
     Short messages are displayed directly, long messages are automatically collapsed into summaries that can be clicked to expand.
     """
 
-    user_intervention_sent = pyqtSignal(str)  # Signal: User sends intervention instruction
+    user_intervention_sent = pyqtSignal(str)
+    rework_requested = pyqtSignal(str)
+    file_linked = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.current_attachment = None
         self.setObjectName("panel")
         self.setStyleSheet(get_panel_style())
-        self._current_state = "ALL"  # 当前过滤状态
-        # 流式消息跟踪
-        self._streaming_messages = {}  # role -> message widget
-        self._streaming_buffers = {}   # role -> buffer content
-        self._typing_timers = {}       # role -> typing timer
+        self._current_state = "ALL"
+        self._streaming_messages = {}
+        self._streaming_buffers = {}
+        self._streaming_display_prefix = {}  # role -> 已打出显示的摘要前缀，逐字追赶 summary，避免打一半卡顿
+        self._streaming_pending = {}
+        self._streaming_deferred_final = {}  # role -> final_content，延后 finalize 等打字机排空
+        self._typewriter_timer = None
+        self._scroll_to_bottom_scheduled = False  # 打字机 tick 内防抖，避免每 35ms 都触发滚动导致卡顿
+        self._typing_timers = {}
         self._init_ui()
 
     def _init_ui(self):
@@ -463,22 +444,20 @@ class WarRoomPanel(QFrame):
         # Main splitter to separate chat area and input area
         self.splitter = QSplitter(Qt.Orientation.Vertical)
         self.splitter.setHandleWidth(1)
-        self.splitter.setStyleSheet(f"""
-            QSplitter::handle {{
-                background-color: {COLORS['border']};
-            }}
+        self.splitter.setStyleSheet("""
+            QSplitter::handle { background: transparent; height: 1px; max-height: 1px; }
         """)
 
         # Top container (Title + Chat)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(12)
 
-        # 1. Header (Small Label)
-        self.header_label = QLabel("WAR ROOM")
+        # 1. 标题
+        self.header_label = QLabel("作战室")
         self.header_label.setStyleSheet(get_header_style())
         layout.addWidget(self.header_label)
 
-        # 2. Message Area
+        # 2. 消息区
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setStyleSheet("background: transparent; border: none;")
@@ -490,67 +469,230 @@ class WarRoomPanel(QFrame):
         self.message_layout.setSpacing(12)
         self.message_layout.addStretch()
         
-        # Placeholder (Empty State)
-        self.placeholder = QLabel()
-        self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.placeholder.setText(
-            "<span style='font-size: 48px; color: #30363D;'>❖</span><br>"
-            "<span style='font-size: 14px; font-weight: 500; color: #8B949E;'>Collaborative session idle...</span>"
-        )
+        # 空状态：菱形 Logo（呼吸灯发光）+ 文案 + 快捷指令建议按钮
+        self.placeholder = QWidget()
+        placeholder_layout = QVBoxLayout(self.placeholder)
+        placeholder_layout.setContentsMargins(24, 24, 24, 24)
+        placeholder_layout.setSpacing(16)
+        placeholder_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.placeholder_logo = QLabel("❖")
+        self.placeholder_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.placeholder_logo.setStyleSheet("font-size: 48px; color: #4a4a5a; background: transparent; border: none;")
+        glow = QGraphicsDropShadowEffect(self.placeholder_logo)
+        glow.setColor(QColor(100, 80, 220))
+        glow.setBlurRadius(20)
+        glow.setOffset(0, 0)
+        self.placeholder_logo.setGraphicsEffect(glow)
+        self._glow_effect = glow
+        self._glow_phase = 0.0
+        self._glow_timer = QTimer(self.placeholder)
+        self._glow_timer.timeout.connect(self._tick_placeholder_glow)
+        self._glow_timer.start(80)
+        placeholder_layout.addWidget(self.placeholder_logo)
+        _sub = QLabel("协作会话空闲…")
+        _sub.setStyleSheet("font-size: 14px; font-weight: 500; color: #8B949E;")
+        _sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        placeholder_layout.addWidget(_sub, 0, Qt.AlignmentFlag.AlignCenter)
         self.message_layout.insertWidget(0, self.placeholder)
         
         self.scroll_area.setWidget(self.message_container)
-        layout.addWidget(self.scroll_area)
 
-        # 3. Input Area (GitHub Style Compact Bar)
-        # Force fixed height for the container as requested
+        # 输入区：凹槽感（内阴影模拟）+ 聚焦时主题蓝边框
+        self._input_focused = False
         self.input_container = QFrame()
-        self.input_container.setFixedHeight(60)
-        self.input_container.setStyleSheet(f"""
-            QFrame {{
-                background-color: {COLORS['bg_secondary']};
-                border: 1px solid {COLORS['border']};
-                border-radius: 6px;
-            }}
-        """)
+        self.input_container.setMinimumHeight(60)
+        self.input_container.setMaximumHeight(380)
+        self._apply_input_container_style(focused=False)
         
         input_layout = QHBoxLayout(self.input_container)
-        input_layout.setContentsMargins(8, 4, 8, 4)
+        input_layout.setContentsMargins(8, 6, 8, 6)
         input_layout.setSpacing(8)
         
         self.input_edit = QTextEdit()
-        self.input_edit.setPlaceholderText("Command the War Room (Ctrl+Enter to send)...")
-        self.input_edit.setStyleSheet("background: transparent; border: none; color: #C9D1D9;")
+        self.input_edit.setPlaceholderText("")
+        self.input_edit.setMinimumWidth(200)
+        self.input_edit.setMinimumHeight(56)
+        self.input_edit.setMaximumHeight(380)
+        self.input_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self.input_edit.setStyleSheet(f"""
+            QTextEdit {{
+                background: transparent;
+                border: none;
+                color: {COLORS['text_primary']};
+                font-size: 13px;
+                padding: 4px 0;
+                min-height: 28px;
+            }}
+        """)
+        doc = self.input_edit.document()
+        doc.setDocumentMargin(6)
+        self.input_edit.setViewportMargins(0, 2, 0, 2)
         self.input_edit.installEventFilter(self)
-        input_layout.addWidget(self.input_edit)
-        
-        layout.addWidget(self.input_container)
+        input_layout.addWidget(self.input_edit, 1)
 
-        # Status row: Indicators + Status Label
+        # 聊天区与输入区用 1px 细线分隔（Cursor 风格），可拖拽调整输入框高度
+        self.chat_input_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.chat_input_splitter.setHandleWidth(1)
+        self.chat_input_splitter.setChildrenCollapsible(False)
+        self.chat_input_splitter.setStyleSheet("""
+            QSplitter::handle { background: transparent; height: 1px; max-height: 1px; }
+        """)
+        self.chat_input_splitter.addWidget(self.scroll_area)
+        self.chat_input_splitter.addWidget(self.input_container)
+        self.chat_input_splitter.setStretchFactor(0, 1)
+        self.chat_input_splitter.setStretchFactor(1, 0)
+        # 初始：输入区足够高，保证占位符「输入消息（Ctrl+Enter 发送）」完整显示
+        self.chat_input_splitter.setSizes([400, 100])
+
+        layout.addWidget(self.chat_input_splitter)
+
+        self.btn_attach = QPushButton("📎")
+        self.btn_attach.setFixedSize(36, 36)
+        self.btn_attach.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_attach.setToolTip("附加文档（Word/PDF 等）")
+        self.btn_attach.setStyleSheet(f"""
+            QPushButton {{
+                background-color: rgba(255,255,255,0.06);
+                color: {COLORS['text_tertiary']};
+                border: none;
+                border-radius: 4px;
+                font-size: 14px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(255,255,255,0.12);
+                color: {COLORS['text_primary']};
+            }}
+            QPushButton:pressed {{ background-color: #404040; }}
+        """)
+        self.btn_attach.clicked.connect(self._on_attach_clicked)
+        input_layout.addWidget(self.btn_attach)
+
+        self.btn_send = QPushButton("发送")
+        self.btn_send.setFixedHeight(36)
+        self.btn_send.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_send.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLORS['accent_primary_blue']};
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: 500;
+                font-size: 13px;
+            }}
+            QPushButton:hover {{
+                background-color: #4096FF;
+            }}
+            QPushButton:pressed {{ background-color: #0958d9; }}
+            QPushButton:disabled {{ background-color: #2a2a2a; color: #666; }}
+        """)
+        self.btn_send.clicked.connect(self._on_send_clicked)
+        input_layout.addWidget(self.btn_send)
+
+        # 任务完成后的「不满意 → 重新评审」内嵌区（默认隐藏）
+        self.rework_container = QFrame()
+        self.rework_container.setStyleSheet(f"""
+            QFrame {{
+                background-color: {COLORS['bg_tertiary']};
+                border: 1px solid {COLORS['border_subtle']};
+                border-radius: 8px;
+                padding: 12px;
+            }}
+        """)
+        rework_layout = QVBoxLayout(self.rework_container)
+        rework_layout.setContentsMargins(12, 10, 12, 10)
+        rework_layout.setSpacing(8)
+        self.rework_label = QLabel("对结果不满意？请说明哪里需要改进，然后让团队重新评审方案。")
+        self.rework_label.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 12px;")
+        self.rework_label.setWordWrap(True)
+        rework_layout.addWidget(self.rework_label)
+        self.rework_category = QComboBox()
+        self.rework_category.addItems([
+            "请选择不满类型（可选）",
+            "需求理解有偏差",
+            "方案或架构不合适",
+            "实现或代码有问题",
+            "其他",
+        ])
+        self.rework_category.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {COLORS['bg_secondary']};
+                color: {COLORS['text_secondary']};
+                border: 1px solid {COLORS['border_subtle']};
+                border-radius: 4px;
+                padding: 6px 10px;
+                font-size: 12px;
+            }}
+        """)
+        rework_layout.addWidget(self.rework_category)
+        self.rework_input = QTextEdit()
+        self.rework_input.setPlaceholderText("请具体说明哪里不满意…")
+        self.rework_input.setMaximumHeight(72)
+        self.rework_input.setStyleSheet(f"background-color: {COLORS['bg_secondary']}; border: 1px solid {COLORS['border_subtle']}; border-radius: 4px; color: {COLORS['text_secondary']}; font-size: 12px; padding: 6px;")
+        rework_layout.addWidget(self.rework_input)
+        self.rework_btn = QPushButton("重新评审方案")
+        self.rework_btn.setStyleSheet(get_button_style(variant="primary"))
+        self.rework_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.rework_btn.clicked.connect(self._on_rework_clicked)
+        rework_layout.addWidget(self.rework_btn)
+        self.rework_container.setVisible(False)
+        layout.addWidget(self.rework_container)
+
+        # 状态行：状态文字（在线状态已移至左侧成员列表头像旁）
         status_row = QHBoxLayout()
         status_row.setSpacing(12)
-
-        # 4. Online Indicator
-        self.online_indicator = QLabel("● NO AGENTS ONLINE")
-        self.online_indicator.setStyleSheet(f"color: {COLORS['text_tertiary']}; font-size: 10px; font-weight: bold;")
-        status_row.addWidget(self.online_indicator)
-        
         status_row.addStretch()
 
-        # 5. Status Label (Muted)
-        self.status_label = QLabel("Collaborative Environment Ready")
-        self.status_label.setStyleSheet(f"color: {COLORS.get('accent_blue', '#58A6FF')}; font-weight: bold; font-size: 11px;")
+        # 状态文字
+        self.status_label = QLabel("协作环境就绪")
+        self.status_label.setStyleSheet(f"color: {COLORS['text_tertiary']}; font-weight: 500; font-size: 11px;")
         status_row.addWidget(self.status_label)
         
         layout.addLayout(status_row)
 
     def eventFilter(self, obj, event):
-        """Handle Ctrl+Enter to send"""
-        if obj == self.input_edit and event.type() == event.Type.KeyPress:
-            if event.key() == Qt.Key.Key_Return and (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
-                self._on_send_clicked()
-                return True
+        """Ctrl+Enter 发送；输入框聚焦时容器边框主题蓝"""
+        if obj == self.input_edit:
+            if event.type() == QEvent.Type.KeyPress:
+                if event.key() == Qt.Key.Key_Return and (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
+                    self._on_send_clicked()
+                    return True
+            elif event.type() == QEvent.Type.FocusIn:
+                self._input_focused = True
+                self._apply_input_container_style(focused=True)
+            elif event.type() == QEvent.Type.FocusOut:
+                self._input_focused = False
+                self._apply_input_container_style(focused=False)
         return super().eventFilter(obj, event)
+
+    def _apply_input_container_style(self, focused: bool):
+        """输入区凹槽样式：内凹感（深色背景+上/左暗边）+ 聚焦时主题蓝边框"""
+        if focused:
+            self.input_container.setStyleSheet(f"""
+                QFrame {{
+                    background-color: #1a1a1a;
+                    border: 1px solid {COLORS['accent_primary_blue']};
+                    border-radius: 6px;
+                }}
+            """)
+        else:
+            self.input_container.setStyleSheet(f"""
+                QFrame {{
+                    background-color: #1a1a1a;
+                    border: 1px solid {COLORS['border_subtle']};
+                    border-radius: 6px;
+                    border-top: 2px solid rgba(0,0,0,0.4);
+                    border-left: 2px solid rgba(0,0,0,0.35);
+                }}
+            """)
+
+    def _tick_placeholder_glow(self):
+        """呼吸灯：蓝紫色发光强度周期变化"""
+        self._glow_phase += 0.06
+        if self._glow_phase > 2 * math.pi:
+            self._glow_phase -= 2 * math.pi
+        r = 12 + int(10 * math.sin(self._glow_phase))
+        self._glow_effect.setBlurRadius(max(8, r))
 
     def _init_input_area(self, container: QWidget):
         # Merged into _init_ui for centering logic
@@ -566,18 +708,48 @@ class WarRoomPanel(QFrame):
             y = (self.input_edit.height() - self.shortcut_hint.height()) // 2
             self.shortcut_hint.move(x, y)
 
+    def _on_attach_clicked(self):
+        """选择并附加文件"""
+        import os
+        path, _ = QFileDialog.getOpenFileName(
+            self, "选择文档", "",
+            "全部支持 (*.docx *.pdf *.txt *.md *.csv *.json);;Word (*.docx);;PDF (*.pdf);;全部 (*.*)"
+        )
+        if path:
+            self.current_attachment = path
+            name = os.path.basename(path)
+            self.input_edit.setPlaceholderText("")
+            self.file_linked.emit(path)
+
     def _on_send_clicked(self):
-        """Handle send button click"""
+        """发送消息（可带附件）"""
         content = self.input_edit.toPlainText().strip()
-        if not content:
+        if not content and not self.current_attachment:
             return
-            
-        print(f"[DEBUG] WarRoomPanel sending: {content}") # DEBUG
-        # Clear input box
+        if self.current_attachment:
+            content = f"[ATTACHMENT: {self.current_attachment}]\n{content}".strip()
+            self.current_attachment = None
+            self.input_edit.setPlaceholderText("")
         self.input_edit.clear()
-        
-        # Emit signal
         self.user_intervention_sent.emit(content)
+
+    def _on_rework_clicked(self):
+        """用户点击「重新评审方案」：汇总反馈并发出信号"""
+        category = self.rework_category.currentText()
+        detail = self.rework_input.toPlainText().strip()
+        if not detail:
+            detail = "(用户未填写具体说明)"
+        if category and category != "请选择不满类型（可选）":
+            feedback = f"[不满类型：{category}]\n\n{detail}"
+        else:
+            feedback = detail
+        self.rework_input.clear()
+        self.rework_category.setCurrentIndex(0)
+        self.rework_requested.emit(feedback)
+
+    def set_rework_visible(self, visible: bool):
+        """任务完成时显示/隐藏「不满意 → 重新评审」区域"""
+        self.rework_container.setVisible(visible)
 
     def append_message(self, role: str, content: str, state_id: str = None):
         """追加一条角色消息到对话流
@@ -672,22 +844,14 @@ class WarRoomPanel(QFrame):
             )
             self.status_label.setStyleSheet(get_thinking_style())
         else:
-            self.status_label.setText("🔇 会议室待命")
+            self.status_label.setText("会议室待命")
             self.status_label.setStyleSheet(f"""
-                color: {COLORS['text_secondary']};
+                color: {COLORS['text_tertiary']};
                 font-size: 11px;
+                font-weight: 500;
                 padding: 4px;
-                background-color: {COLORS['bg_primary']};
-                border-radius: 4px;
+                background-color: transparent;
             """)
-
-    def set_active_roles(self, roles: list):
-        """更新在线角色指示器"""
-        icons = []
-        for role in roles:
-            profile = AGENT_PROFILES.get(role, {"icon": "🤖"})
-            icons.append(profile["icon"])
-        self.online_indicator.setText(" ".join(icons) + " 在线")
 
     def clear_display(self):
         """清空所有消息"""
@@ -701,6 +865,7 @@ class WarRoomPanel(QFrame):
         # 清除流式消息跟踪
         self._streaming_messages.clear()
         self._streaming_buffers.clear()
+        self._streaming_display_prefix.clear()
         for timer in self._typing_timers.values():
             if timer and timer.isActive():
                 timer.stop()
@@ -712,168 +877,170 @@ class WarRoomPanel(QFrame):
             self.message_layout.insertWidget(0, self.placeholder)
 
     def append_stream_chunk(self, role: str, chunk: str):
-        """追加流式输出片段到指定角色的消息
-
-        Args:
-            role: 角色标识
-            chunk: 流式片段内容
-        """
-        print(f"[DEBUG] append_stream_chunk called: role={role}, chunk={repr(chunk)}")
-        # 首次收到消息时隐藏占位提示
+        """追加流式片段到待显示缓冲，由定时器逐字打出打字机效果"""
         if self.placeholder.isVisible():
             self.placeholder.setVisible(False)
-
-        # 初始化角色的缓冲区
         if role not in self._streaming_buffers:
             self._streaming_buffers[role] = ""
+        if role not in self._streaming_pending:
+            self._streaming_pending[role] = ""
+        self._streaming_pending[role] += chunk
 
-        # 追加新片段到缓冲区
-        self._streaming_buffers[role] += chunk
-
-        # 移除原先遍历所有消息寻找旧消息的错误逻辑
-        # 这种逻辑会导致如果该角色在历史中发过言，其后续流式都会被强制丢弃。
-
-        # 检查是否已有该角色的流式消息部件
         if role not in self._streaming_messages:
-            print(f"[DEBUG] 创建新的流式消息部件 for {role}")
-            # 创建新的流式消息部件
             profile = AGENT_PROFILES.get(role, {
                 "name": role, "color": COLORS['text_secondary'], "icon": "🤖"
             })
-
-            # 创建初始消息，显示为"正在输入..."
-            initial_content = f"{chunk}█"  # 添加光标效果
-            msg_widget = CollapsibleMessage(role, initial_content, profile)
-
-            # 标记为流式消息
+            msg_widget = CollapsibleMessage(role, "", profile)
             msg_widget.setProperty("is_streaming", True)
+            # 流式时不显示框线
+            msg_widget.bubble_container.setStyleSheet(f"""
+                QFrame {{ background-color: transparent; border: none; }}
+                QLabel {{
+                    background-color: transparent;
+                    color: {COLORS['text_primary']};
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+                    font-size: 13px;
+                    line-height: 1.5;
+                }}
+            """)
             msg_widget.setProperty("stream_role", role)
-            msg_widget.setProperty("role", role)  # 设置角色标识
-
-            # 添加到布局
+            msg_widget.setProperty("role", role)
             insert_pos = self.message_layout.count() - 1
             self.message_layout.insertWidget(insert_pos, msg_widget)
-
-            # 保存引用
             self._streaming_messages[role] = msg_widget
-
-            # 根据当前过滤状态决定是否显示
             if self._current_state != "ALL":
                 msg_widget.setVisible(False)
-        else:
-            # print(f"[DEBUG] 更新现有流式消息部件 for {role}")
-            msg_widget = self._streaming_messages[role]
-            
-            # 更新内容
-            content_with_cursor = f"{self._streaming_buffers[role]}█"
-            
-            # 查找内容所在的 QLabel/QTextEdit 组件并更新
-            # CollapsibleMessage 使用了 QLabel 或者是 QTextEdit 存放 intro 和 detail
-            # 这里我们直接强制重新执行它的内部 _split_content 拆分并重新渲染
-            
-            # 清理旧的 bubble_layout 里的内容（除了 name_label 以外）
-            layout = msg_widget.bubble_container.layout()
-            
-            # 从后往前删，保留最后的 stretch 和 name_label
-            while layout.count() > 1: # 保留第一个元素通常是 name_label 或第一个 intro
-                item = layout.takeAt(1)
-                if item.widget():
-                    item.widget().deleteLater()
-                    
-            # 获取 name_label 后的第一个 intro_label
-            if layout.count() > 0:
-                first_item = layout.itemAt(0).widget()
-                # 如果这个不是 name_label，而是直接的 intro_label (User 角色)
-                if not getattr(first_item, 'text', lambda: "")().isupper(): # 简单判断是不是 name_label
-                    item = layout.takeAt(0)
-                    if item.widget():
-                        item.widget().deleteLater()
 
-            is_user = (role == "Commander") or (role == "User")
-            if not is_user and layout.count() == 0:
-                # 理论上保留 name_label，这里保守重建
-                profile = AGENT_PROFILES.get(role, AGENT_PROFILES["System"])
-                name_label = QLabel(profile["name"])
-                name_label.setStyleSheet(f"""
-                    color: {COLORS['text_secondary']};
-                    font-size: 10px;
-                    font-weight: 700;
-                    text-transform: uppercase;
-                    letter-spacing: 0.05em;
-                    border: none;
-                    background: transparent;
-                    margin-bottom: 2px;
-                """)
-                layout.addWidget(name_label)
-
-            intro, detail = msg_widget._split_content(content_with_cursor)
-            
-            if intro:
-                intro_label = QLabel(intro)
-                intro_label.setWordWrap(True)
-                layout.addWidget(intro_label)
-
-            if detail:
-               msg_widget._init_detail_ui(detail, layout, is_user)
-
-        # 滚动到底部
+        if self._typewriter_timer is None or not self._typewriter_timer.isActive():
+            self._typewriter_timer = QTimer(self)
+            self._typewriter_timer.timeout.connect(self._tick_warroom_typewriter)
+            self._typewriter_timer.start(35)
         self._scroll_to_bottom()
 
-    def finalize_streaming_message(self, role: str, final_content: str = None):
-        """结束指定角色的流式消息，转换为普通消息
+    def _tick_warroom_typewriter(self):
+        """打字机滴漏：每 tick 多排一些字；摘要打完后若已有最终内容则立即替换，避免卡顿后整段跳出。"""
+        for role in list(self._streaming_pending.keys()):
+            pending = self._streaming_pending[role]
+            if not pending:
+                continue
+            # 仅当 buffer 中已有 \n\n（摘要与详情已分界）且绿框摘要已打满时，才提前替换，避免误判导致没有打字机
+            if role in self._streaming_deferred_final:
+                buffer = self._streaming_buffers.get(role, "")
+                if "\n\n" in buffer:
+                    target = _streaming_summary_only(buffer)
+                    cur = self._streaming_display_prefix.get(role, "")
+                    if cur == target and target:
+                        del self._streaming_pending[role]
+                        self._do_finalize_streaming_message(role)
+                        continue
+            # 每 tick 多取字以减少积压（后端常以 ~50 字/块推送）；英文最多 4 字/ tick，中文最多 2 字
+            if len(pending) >= 2 and ord(pending[0]) < 0x80 and ord(pending[1]) < 0x80:
+                take = min(4, len(pending))
+            else:
+                take = min(2, len(pending)) if pending else 0
+            self._streaming_buffers[role] += pending[:take]
+            self._streaming_pending[role] = pending[take:]
+            target = _streaming_summary_only(self._streaming_buffers[role])
+            if not self._streaming_pending[role]:
+                del self._streaming_pending[role]
+                self._streaming_display_prefix[role] = target  # pending 排空时摘要一次性显示完整
+            else:
+                cur = self._streaming_display_prefix.get(role, "")
+                lag = len(target) - len(cur)
+                step = min(4, max(1, lag))  # 每 tick 最多前进 4 字，与排水匹配
+                new_len = min(len(cur) + step, len(target))
+                self._streaming_display_prefix[role] = target[:new_len]
+            self._refresh_streaming_display(role)
+        for role in list(self._streaming_deferred_final.keys()):
+            if role not in self._streaming_pending or not self._streaming_pending.get(role):
+                self._do_finalize_streaming_message(role)
+        if not self._streaming_pending and not self._streaming_deferred_final and self._typewriter_timer:
+            self._typewriter_timer.stop()
+            self._scroll_to_bottom_scheduled = False
+        # 防抖：打字机期间只预约一次滚动，避免每 35ms 都滚动造成卡顿
+        if not getattr(self, "_scroll_to_bottom_scheduled", False):
+            self._scroll_to_bottom_scheduled = True
+            QTimer.singleShot(80, self._scroll_to_bottom_debounced)
 
-        Args:
-            role: 角色标识
-            final_content: 最终完整内容（如果为None则使用缓冲区内容）
-        """
-        print(f"[DEBUG] finalize_streaming_message called: role={role}, final_content provided={final_content is not None}")
+    def _refresh_streaming_display(self, role: str):
+        """流式阶段：只显示红框摘要的逐字前缀+光标，不显示蓝框；单块、仅更新文本避免跳动。"""
         if role not in self._streaming_messages:
-            print(f"[DEBUG] 角色{role}没有流式消息，直接返回")
             return
+        msg_widget = self._streaming_messages[role]
+        display_text = self._streaming_display_prefix.get(role, "")
+        layout = msg_widget.bubble_container.layout()
+        content_label = getattr(msg_widget, "_stream_content_label", None)
+        if content_label is not None and content_label.parent() is not None:
+            content_label.setText(display_text)
+            return
+        is_user = (role == "Commander") or (role == "User")
+        if not is_user:
+            profile = AGENT_PROFILES.get(role, AGENT_PROFILES["System"])
+            name_label = QLabel(profile["name"])
+            name_label.setStyleSheet(f"""
+                color: {COLORS['text_secondary']};
+                font-size: 10px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                border: none;
+                background: transparent;
+                margin-bottom: 2px;
+            """)
+            layout.addWidget(name_label)
+        content_label = QLabel(display_text)
+        content_label.setWordWrap(True)
+        content_label.setStyleSheet("border: none; outline: none;")
+        layout.addWidget(content_label)
+        msg_widget._stream_content_label = content_label
 
-        # 获取缓冲区的最终内容
-        if final_content is None:
-            final_content = self._streaming_buffers.get(role, "")
-        print(f"[DEBUG] 最终内容长度: {len(final_content)}")
+    def finalize_streaming_message(self, role: str, final_content: str = None):
+        """结束流式消息：若该角色尚有 pending 则延后，等打字机排空后再替换为最终消息"""
+        if role not in self._streaming_messages:
+            return
+        self._streaming_deferred_final[role] = final_content if final_content is not None else (self._streaming_buffers.get(role, "") + self._streaming_pending.get(role, ""))
+        if role not in self._streaming_pending or not self._streaming_pending.get(role):
+            self._do_finalize_streaming_message(role)
+        elif self._typewriter_timer is None or not self._typewriter_timer.isActive():
+            self._typewriter_timer = QTimer(self)
+            self._typewriter_timer.timeout.connect(self._tick_warroom_typewriter)
+            self._typewriter_timer.start(35)
 
-        # 移除光标效果
-        final_content = final_content.replace("█", "")
-
-        # 移除旧的流式消息部件
+    def _do_finalize_streaming_message(self, role: str):
+        """真正执行：移除流式气泡并追加最终消息（由 tick 排空后或 finalize 无 pending 时调用）"""
+        if role not in self._streaming_deferred_final:
+            return
+        final_content = self._streaming_deferred_final.pop(role, "").replace("█", "")
+        if self._typewriter_timer and not self._streaming_pending and not self._streaming_deferred_final:
+            self._typewriter_timer.stop()
         msg_widget = self._streaming_messages.pop(role, None)
-        if msg_widget:
-            print(f"[DEBUG] 移除流式消息部件")
-            self.message_layout.removeWidget(msg_widget)
-            msg_widget.deleteLater()
-
-        # 清除缓冲区
         if role in self._streaming_buffers:
             del self._streaming_buffers[role]
-
-        # 创建最终的普通消息
+        if role in self._streaming_display_prefix:
+            del self._streaming_display_prefix[role]
+        if role in self._streaming_pending:
+            del self._streaming_pending[role]
+        if msg_widget:
+            self.message_layout.removeWidget(msg_widget)
+            msg_widget.deleteLater()
         if final_content.strip():
-            print(f"[DEBUG] 创建最终的普通消息")
-            profile = AGENT_PROFILES.get(role, {
-                "name": role, "color": COLORS['text_secondary'], "icon": "🤖"
-            })
+            profile = AGENT_PROFILES.get(role, {"name": role, "color": COLORS['text_secondary'], "icon": "🤖"})
             final_widget = CollapsibleMessage(role, final_content, profile)
             final_widget.setProperty("is_streaming", False)
-            final_widget.setProperty("role", role)  # 设置角色标识
-
-            # 添加到布局末尾（在弹簧之前）
+            final_widget.setProperty("role", role)
             insert_pos = self.message_layout.count() - 1
             self.message_layout.insertWidget(insert_pos, final_widget)
-
-            # 根据过滤状态设置可见性
             if self._current_state != "ALL":
                 final_widget.setVisible(False)
+        self._scroll_to_bottom()
 
-            # 滚动到底部
-            self._scroll_to_bottom()
+    def _scroll_to_bottom_debounced(self):
+        """打字机防抖：执行滚动并允许下次再预约"""
+        self._scroll_to_bottom_scheduled = False
+        self._scroll_to_bottom()
 
     def _scroll_to_bottom(self):
         """滚动到底部"""
-        from PyQt6.QtCore import QTimer
         QTimer.singleShot(50, lambda: (
             self.scroll_area.verticalScrollBar().setValue(
                 self.scroll_area.verticalScrollBar().maximum()

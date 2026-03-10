@@ -1,337 +1,205 @@
 """
-bridge_panel.py - CKO 深度沟通区 (The Bridge)
-================================================
-左侧面板：用户与 CKO (Gemini) 的需求打磨对话区。
-包含对话流显示、输入框、发送按钮和"确认立项"按钮。
+bridge_panel.py - 项目组成员列表（左侧）
+==========================================
+带头像、名称与状态的 AI 成员列表，对话输入在作战室进行。
 """
 
-from PyQt6.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel,
-    QTextEdit, QPushButton, QSizePolicy, QFileDialog,
-    QScrollArea, QWidget, QGridLayout
-)
-import os
-from PyQt6.QtCore import pyqtSignal, Qt, QTimer
-from PyQt6.QtGui import QFont, QTextCursor
+from PyQt6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget
+from PyQt6.QtCore import pyqtSignal, Qt
 
-from ui.styles import COLORS, get_panel_style, get_header_style, get_button_style, get_audit_stamp_style, get_input_style
-from ui.warroom_panel import CollapsibleMessage, SystemEventLabel
+from ui.styles import COLORS, get_panel_style, get_header_style
 from config import AGENT_PROFILES
+
+# 标题左侧装饰条与状态点颜色
+ACCENT_BAR_COLOR = COLORS.get("accent_primary_blue", "#1677FF")
+STATUS_DOT_IDLE = "#8C8C8C"
+STATUS_DOT_READY = "#52C41A"  # 就绪/活跃绿
+STATUS_DOT_TYPING = "#1677FF"  # 思考中蓝
+STATUS_DOT_SPEAKING = "#52C41A"  # 发言中绿
+# 在线/离线指示灯（与工作状态独立）
+ONLINE_DOT_COLOR = "#52C41A"   # 在线绿点
+OFFLINE_DOT_COLOR = "#8C8C8C"  # 离线灰点
+
+BRIDGE_ROLES = ["CKO", "PM", "Arch", "Designer", "Coder", "Validator"]
+STATUS_TEXT = {"idle": "空闲", "typing": "思考中", "speaking": "发言中"}
+
+# 成员列表：Cursor 线稿风（灰底+首字母，无彩色）
+TEAM_AVATAR_STYLE = {
+    "CKO":      {"icon": "K", "name": "CKO"},
+    "PM":       {"icon": "P", "name": "PM"},
+    "Arch":     {"icon": "A", "name": "Arch"},
+    "Designer": {"icon": "D", "name": "Designer"},
+    "Coder":    {"icon": "C", "name": "Coder"},
+    "Validator":{"icon": "V", "name": "Validator"},
+}
 
 
 class BridgePanel(QFrame):
-    """CKO 深度沟通区面板
+    """项目组成员列表：头像 + 名称 + 状态"""
 
-    信号:
-        message_sent: 用户发送消息时触发, 携带消息文本
-        project_confirmed: 用户点击"确认立项"时触发
-    """
-
-    # ---------- 自定义信号 ----------
-    message_sent = pyqtSignal(str)           # 用户发送消息
-    project_confirmed = pyqtSignal()          # 确认立项
-    file_linked = pyqtSignal(str)           # [NEW] 文件链接信号
+    project_confirmed = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.projectId = f"PROJ-{hash(self) % 10000:04d}"
-        self._is_sending = False  # 防止重复发送标志
+        self._role_status = {}
+        self._role_rows = {}
         self._init_ui()
 
     def _init_ui(self):
-        """Standard GitHub Style UI"""
-        # Ensure Qt is accessible in this scope
-        from PyQt6.QtCore import Qt
         self.setObjectName("panel")
         self.setStyleSheet(get_panel_style())
-        
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
 
-        # 1. Header (Small Label)
-        self.header_label = QLabel("BRIDGE")
-        self.header_label.setStyleSheet(get_header_style())
-        layout.addWidget(self.header_label)
+        # 标题：左侧 3px×16px 主题蓝竖线 + 加粗文字（背景透明，透出面板）
+        header_widget = QWidget()
+        header_widget.setStyleSheet("background: transparent; border: none;")
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(0, 0, 0, 6)
+        header_layout.setSpacing(8)
+        accent_bar = QFrame()
+        accent_bar.setFixedSize(3, 16)
+        accent_bar.setStyleSheet(f"background-color: {ACCENT_BAR_COLOR}; border: none; border-radius: 1px;")
+        header_layout.addWidget(accent_bar)
+        self.header_label = QLabel("项目组成员列表")
+        self.header_label.setStyleSheet(f"""
+            color: {COLORS['text_tertiary']};
+            font-size: 11px;
+            font-weight: 700;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            background: transparent;
+            border: none;
+        """)
+        header_layout.addWidget(self.header_label)
+        header_layout.addStretch()
+        layout.addWidget(header_widget)
 
-        # 2. Message Area
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setStyleSheet("background: transparent; border: none;")
-        
-        self.message_container = QWidget()
-        self.message_container.setStyleSheet("background: transparent;")
-        self.message_layout = QVBoxLayout(self.message_container)
-        self.message_layout.setContentsMargins(0, 0, 0, 0)
-        self.message_layout.setSpacing(12)
-        self.message_layout.addStretch()
-        
-        self.scroll_area.setWidget(self.message_container)
-        layout.addWidget(self.scroll_area)
-
-        # 3. Input Area (GitHub Style Compact Bar)
-        # Force fixed height for the container as requested
-        self.input_container = QFrame()
-        self.input_container.setFixedHeight(60) 
-        self.input_container.setStyleSheet(f"""
+        list_container = QFrame()
+        list_container.setStyleSheet(f"""
             QFrame {{
-                background-color: {COLORS['bg_secondary']};
-                border: 1px solid {COLORS['border']};
-                border-radius: 6px;
+                background-color: {COLORS['bg_tertiary']};
+                border: none;
+                border-radius: 4px;
             }}
         """)
-        
-        input_layout = QHBoxLayout(self.input_container)
-        input_layout.setContentsMargins(8, 4, 8, 4)
-        input_layout.setSpacing(8)
-        
-        self.input_box = QTextEdit()
-        self.input_box.setPlaceholderText("Brief the CKO...")
-        self.input_box.setStyleSheet("background: transparent; border: none; color: #C9D1D9;")
-        input_layout.addWidget(self.input_box)
-        
-        # Send Button (Icon only)
-        self.btn_send = QPushButton("→") 
-        self.btn_send.setFixedSize(28, 28)
-        self.btn_send.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_send.setStyleSheet(get_button_style(variant="icon"))
-        self.btn_send.clicked.connect(self._on_send)
-        input_layout.addWidget(self.btn_send)
-        
-        # [NEW] Attach Button (Clip Icon)
-        self.btn_attach = QPushButton("📎")
-        self.btn_attach.setFixedSize(28, 28)
-        self.btn_attach.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_attach.setToolTip("Attach Word Document")
-        self.btn_attach.setStyleSheet(get_button_style(variant="icon"))
-        self.btn_attach.clicked.connect(self._on_attach)
-        input_layout.insertWidget(1, self.btn_attach) # Insert before input box or after? Let's put it left of input
-        
-        layout.addWidget(self.input_container)
+        list_layout = QVBoxLayout(list_container)
+        list_layout.setContentsMargins(10, 10, 10, 10)
+        list_layout.setSpacing(8)
 
-        # Status Label (Muted)
-        self.status_label = QLabel("Waiting for mission data...")
-        self.status_label.setStyleSheet(f"color: {COLORS['text_tertiary']}; font-size: 11px;")
-        # [FIX] 防止长文件名撧开面板宽度
-        self.status_label.setWordWrap(False)
-        self.status_label.setMaximumWidth(400)
-        self.status_label.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
-        layout.addWidget(self.status_label)
-        
-        self.current_attachment = None
+        self._role_online = {r: False for r in BRIDGE_ROLES}
+        for role in BRIDGE_ROLES:
+            style = TEAM_AVATAR_STYLE.get(role, {"icon": "?", "name": role})
+            self._role_status[role] = "idle"
+            row = QFrame()
+            row.setStyleSheet("background: transparent; border: none;")
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(8, 6, 8, 6)
+            row_layout.setSpacing(12)
 
-    def _on_attach(self):
-        """Handle file attachment"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Document", "",
-            "All Supported (*.docx *.pdf *.txt *.md *.csv *.json);;"
-            "Word Documents (*.docx);;"
-            "PDF Files (*.pdf);;"
-            "Text Files (*.txt *.md *.csv *.json);;"
-            "All Files (*.*)"
-        )
-        if file_path:
-            self.current_attachment = file_path
-            filename = os.path.basename(file_path)
-            # [FIX] 截断长文件名防止撧开面板比例
-            display_name = filename if len(filename) <= 25 else filename[:22] + "..."
-            self.status_label.setText(f"📎 Attached: {display_name}")
-            self.input_box.setPlaceholderText(f"Ask CKO about {display_name}...")
-            
-            # Emit signal to update other panels
-            self.file_linked.emit(file_path)
+            # 头像容器：头像 + 右下角在线/离线指示灯（与工作状态共存）
+            avatar_container = QWidget()
+            avatar_container.setFixedSize(36, 36)
+            avatar = QLabel(style["icon"])
+            avatar.setParent(avatar_container)
+            avatar.setGeometry(0, 0, 36, 36)
+            avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            avatar.setStyleSheet(f"""
+                QLabel {{
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                        stop:0 {COLORS['bg_avatar']}, stop:1 #2a2a2a);
+                    color: {COLORS['text_primary']};
+                    border-radius: 4px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                }}
+            """)
+            online_dot = QLabel()
+            online_dot.setParent(avatar_container)
+            online_dot.setFixedSize(8, 8)
+            online_dot.setGeometry(26, 26, 8, 8)
+            online_dot.setStyleSheet(
+                f"background-color: {OFFLINE_DOT_COLOR}; border: 1px solid {COLORS['bg_tertiary']}; border-radius: 4px;"
+            )
+            name_label = QLabel(style["name"])
+            name_label.setStyleSheet(f"color: {COLORS['text_primary']}; font-weight: 600; font-size: 13px; background: transparent; border: none;")
+            name_label.setFixedWidth(72)
+            # 状态指示灯（圆点）+ 状态文字
+            status_dot = QLabel()
+            status_dot.setFixedSize(6, 6)
+            status_dot.setStyleSheet(f"background-color: {STATUS_DOT_IDLE}; border: none; border-radius: 3px;")
+            status_label = QLabel(STATUS_TEXT["idle"])
+            status_label.setStyleSheet(f"color: {COLORS['text_tertiary']}; font-size: 11px; background: transparent; border: none;")
+            status_row = QWidget()
+            status_row_layout = QHBoxLayout(status_row)
+            status_row_layout.setContentsMargins(0, 0, 0, 0)
+            status_row_layout.setSpacing(6)
+            status_row_layout.addWidget(status_dot)
+            status_row_layout.addWidget(status_label)
+            status_row_layout.addStretch()
 
-    def _on_send(self):
-        """发送消息"""
-        # 防止重复发送
-        if self._is_sending:
-            # print(f"[DEBUG] BridgePanel: 正在发送中，忽略重复调用")
+            row_layout.addWidget(avatar_container)
+            row_layout.addWidget(name_label)
+            row_layout.addWidget(status_row, 1)
+            list_layout.addWidget(row)
+            self._role_rows[role] = {
+                "avatar": avatar,
+                "name": name_label,
+                "status": status_label,
+                "status_dot": status_dot,
+                "online_dot": online_dot,
+            }
+
+        layout.addWidget(list_container)
+        layout.addStretch()
+
+    def set_role_status(self, role: str, status: str):
+        """设置某 AI 角色工作状态：idle=灰点，typing/speaking=绿点/蓝点，并更新状态文字（与在线指示灯独立）"""
+        if role not in self._role_rows:
             return
-
-        self._is_sending = True
-        try:
-            content = self.input_box.toPlainText().strip()
-            # print(f"[DEBUG] BridgePanel: _on_send called, content={repr(content)}, has_attachment={self.current_attachment is not None}")
-
-            if not content and not self.current_attachment:
-                # print(f"[DEBUG] BridgePanel: 空内容，返回")
-                self._is_sending = False
-                return
-
-            # Prepend attachment path if exists
-            context_msg = content
-            if self.current_attachment:
-                context_msg = f"[ATTACHMENT: {self.current_attachment}]\n{content}"
-                self.current_attachment = None # Reset after sending
-                self.status_label.setText("Waiting for mission data...")
-                self.input_box.setPlaceholderText("Brief the CKO...")
-
-            # print(f"[DEBUG] BridgePanel: Emitting message_sent signal with content: {context_msg[:100]}")
-            self.message_sent.emit(context_msg)
-
-            # 清空输入框
-            self.input_box.clear()
-
-            # 显示用户消息到UI
-            print("[DEBUG] BridgePanel: Appending message to UI...")
-            self._append_message("Commander", content, COLORS['bg_secondary'])
-            self.btn_send.setEnabled(False)
-
-            print(f"[DEBUG] BridgePanel: 发送完成")
-
-        except Exception as e:
-            print(f"[ERROR] BridgePanel: _on_send error: {e}")
-            import traceback
-            traceback.print_exc()
-            self._is_sending = False
-            raise
-        finally:
-            # 小延迟后重置发送标志，避免快速连续发送问题
-            from PyQt6.QtCore import QTimer
-            QTimer.singleShot(500, lambda: setattr(self, '_is_sending', False)) 
-        
-
-
-
-    def _on_upload(self):
-        """处理上传按钮点击"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "选择 Word 文档",
-            "",
-            "All Supported (*.docx *.pdf *.txt *.md *.csv *.json);;"
-            "Word Documents (*.docx);;"
-            "PDF Files (*.pdf);;"
-            "Text Files (*.txt *.md *.csv *.json);;"
-            "All Files (*.*)"
+        self._role_status[role] = status
+        text = STATUS_TEXT.get(status, "空闲")
+        self._role_rows[role]["status"].setText(text)
+        # 工作状态指示灯：空闲=灰，思考中=蓝，发言中/就绪=绿
+        dot_color = STATUS_DOT_IDLE
+        if status == "typing":
+            dot_color = STATUS_DOT_TYPING
+        elif status == "speaking":
+            dot_color = STATUS_DOT_READY
+        self._role_rows[role]["status_dot"].setStyleSheet(
+            f"background-color: {dot_color}; border: none; border-radius: 3px;"
         )
-        if file_path:
-            self._current_file_path = file_path
-            self.file_linked.emit(file_path) # Emit signal
-            
-            # Show processed text preview
-            self._process_docx(file_path)
+        text_color = COLORS["text_tertiary"]
+        if status == "typing":
+            text_color = COLORS.get("accent_blue", "#1677FF")
+        elif status == "speaking":
+            text_color = STATUS_DOT_READY
+        self._role_rows[role]["status"].setStyleSheet(
+            f"color: {text_color}; font-size: 11px; background: transparent; border: none;"
+        )
 
-    def _process_docx(self, file_path: str):
-        """解析文档并填入输入框（支持多格式）"""
-        try:
-            from tools.document_parser import parse_document
-            result = parse_document(file_path)
-            content = result.to_prompt_text()
-            filename = os.path.basename(file_path)
+    def set_role_online(self, role: str, is_online: bool):
+        """设置某角色的在线/离线状态（头像右下角绿点/灰点），与工作状态共存"""
+        self._role_online[role] = is_online
+        if role not in self._role_rows or "online_dot" not in self._role_rows[role]:
+            return
+        color = ONLINE_DOT_COLOR if is_online else OFFLINE_DOT_COLOR
+        self._role_rows[role]["online_dot"].setStyleSheet(
+            f"background-color: {color}; border: 1px solid {COLORS['bg_tertiary']}; border-radius: 4px;"
+        )
 
-            # 格式化插入内容
-            insert_text = (
-                f"【已加载文档: {filename}】\n"
-                f"{'─' * 40}\n"
-                f"{content}\n"
-                f"{'─' * 40}\n"
-                f"请根据上述文档内容，分析用户需求并提取关键任务点。\n"
-            )
-
-            # 追加到输入框（保留用户已有输入）
-            current_text = self.input_box.toPlainText()
-            if current_text:
-                self.input_box.setText(current_text + "\n\n" + insert_text)
-            else:
-                self.input_box.setText(insert_text)
-
-            self.status_label.setText(f"📎 已加载: {filename}")
-
-        except ImportError:
-            # 降级: 使用旧版 docx 解析
-            self._process_docx_legacy(file_path)
-        except Exception as e:
-            self.status_label.setText(f"❌ 文档解析失败: {str(e)}")
-
-    def _process_docx_legacy(self, file_path: str):
-        """降级解析（仅 docx 纯文本提取）"""
-        try:
-            import docx as docx_lib
-            doc = docx_lib.Document(file_path)
-            full_text = [para.text for para in doc.paragraphs if para.text.strip()]
-            content = "\n".join(full_text)
-            filename = os.path.basename(file_path)
-
-            insert_text = (
-                f"【已加载文档: {filename}】\n"
-                f"{'─' * 40}\n"
-                f"{content}\n"
-                f"{'─' * 40}\n"
-                f"请根据上述文档内容，分析用户需求并提取关键任务点。\n"
-            )
-
-            current_text = self.input_box.toPlainText()
-            if current_text:
-                self.input_box.setText(current_text + "\n\n" + insert_text)
-            else:
-                self.input_box.setText(insert_text)
-
-            self.status_label.setText(f"📎 已加载: {filename}")
-        except Exception as e:
-            self.status_label.setText(f"❌ 文档解析失败: {str(e)}")
-
-
-    def _on_confirm(self):
-        """处理确认立项按钮点击"""
-        self._append_system_message("✅ 任务已确认立项！正在将 Mission Protocol 发送至团队...")
-        self.project_confirmed.emit()
-
-    def _append_message(self, role: str, content: str, color: str, is_user: bool = False):
-        """向对话流中追加一条消息"""
-        # 构造 Profile
-        if is_user:
-            profile = {"name": "User", "color": color, "icon": "👤"}
-        else:
-            # 尝试从配置获取，默认 CKO
-            profile = AGENT_PROFILES.get("CKO", {"name": "CKO", "color": color, "icon": "🧠"})
-            
-        # 创建可折叠消息卡片
-        msg_widget = CollapsibleMessage(role, content, profile)
-        
-        # 插到弹簧前面
-        insert_pos = self.message_layout.count() - 1
-        self.message_layout.insertWidget(insert_pos, msg_widget)
-        
-        # 滚动到底部
-        self._scroll_to_bottom()
-
-    def _append_system_message(self, content: str):
-        """追加系统消息（居中显示）"""
-        event_widget = SystemEventLabel(content)
-        insert_pos = self.message_layout.count() - 1
-        self.message_layout.insertWidget(insert_pos, event_widget)
-        self._scroll_to_bottom()
-
-    def append_ke_response(self, content: str):
-        """追加 CKO 回复到对话流（外部调用接口）"""
-        self._append_message("🧠 CKO", content, COLORS.get('accent_blue', '#58A6FF'))
+    def set_roles_online(self, roles: list):
+        """批量设置在线角色，其余为离线。roles 为在线角色 id 列表（如 ['Arch','Coder','PM']）。"""
+        for r in BRIDGE_ROLES:
+            self.set_role_online(r, r in roles)
 
     def set_status(self, text: str):
-        """更新状态栏文字"""
-        self.status_label.setText(text)
+        """保留接口兼容"""
+        pass
 
-    def set_ke_typing(self, is_typing: bool):
-        """设置 CKO 正在输入状态"""
-        if is_typing:
-            self.set_status("🧠 CKO 正在思考...")
-            self.btn_send.setEnabled(False)
-        else:
-            self.set_status("💡 状态：等待输入需求...")
-            self.btn_send.setEnabled(True)
-
-    def keyPressEvent(self, event):
-        """Ctrl+Enter 快捷发送"""
-        if (event.key() == Qt.Key.Key_Return and
-                event.modifiers() == Qt.KeyboardModifier.ControlModifier):
-            self._on_send()
-        else:
-            super().keyPressEvent(event)
-
-    def _scroll_to_bottom(self):
-        """滚动到底部"""
-        QTimer.singleShot(50, lambda: (
-            self.scroll_area.verticalScrollBar().setValue(
-                self.scroll_area.verticalScrollBar().maximum()
-            )
-        ))
+    def _on_confirm(self):
+        """确认立项（由导航栏按钮触发）"""
+        self.project_confirmed.emit()

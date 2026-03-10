@@ -293,29 +293,34 @@ class BaseAgent(QObject):
         self._messages = system_messages + other_messages
 
     def set_domain_persona(self, task_type: str):
-        """Dynamic Persona Injection based on Task Type"""
+        """按任务类型注入角色与产出形态，避免非软件项目被当成写代码。"""
         persona_map = {
             "SOFTWARE": {
-                "Arch": "System Architect", "Designer": "UI/UX Designer", "Coder": "Full-Stack Developer", "Tester": "QA Engineer"
+                "Arch": "System Architect", "Designer": "UI/UX Designer", "Coder": "Full-Stack Developer", "Tester": "QA Engineer",
+                "output": "可执行代码与文档；执行阶段产出代码。",
             },
             "ENGINEERING": {
-                "Arch": "Chief Engineer", "Designer": "CAD Specialist", "Coder": "Calculation Engineer", "Tester": "Safety Inspector"
+                "Arch": "Chief Engineer", "Designer": "CAD Specialist", "Coder": "Calculation Engineer", "Tester": "Safety Inspector",
+                "output": "方案文档、图纸说明、计算书、风险评估报告等；禁止以代码为主要产出。",
             },
             "DESIGN": {
-                "Arch": "Feasibility Analyst", "Designer": "Industrial Designer", "Coder": "Prototype Engineer", "Tester": "User Researcher"
+                "Arch": "Feasibility Analyst", "Designer": "Industrial Designer", "Coder": "Prototype Engineer", "Tester": "User Researcher",
+                "output": "设计说明、效果图描述、交互说明、模型概念等；禁止以代码为主要产出。",
             },
             "RESEARCH": {
-                "Arch": "Methodology Expert", "Designer": "Data Visualizer", "Coder": "Data Analyst", "Tester": "Peer Reviewer"
-            }
+                "Arch": "Methodology Expert", "Designer": "Data Visualizer", "Coder": "Data Analyst", "Tester": "Peer Reviewer",
+                "output": "文献综述、实验设计、数据分析方案、调研报告等；禁止以代码为主要产出。",
+            },
         }
-        
-        domain_role = persona_map.get(task_type, {}).get(self.role, self.role)
-        
+        cfg = persona_map.get(task_type, persona_map["SOFTWARE"])
+        domain_role = cfg.get(self.role, self.role)  # 仅角色名键，不含 "output"
+        output_form = cfg.get("output", "可执行代码与文档。")
         injection = (
             f"\n\n[SYSTEM UPDATE]\n"
             f"Current Project Mode: {task_type}\n"
             f"Your Role Adaptation: {domain_role}\n"
-            f"Please adjust your expertise and output format accordingly."
+            f"Project output form: {output_form}\n"
+            f"Do not default to writing or discussing code unless task_type is SOFTWARE. Adjust expertise and output accordingly."
         )
         self.update_system_prompt(injection)
 
@@ -488,14 +493,23 @@ class BaseAgent(QObject):
             # 调用子类的 _call_api，传递工具 schema（如果支持）
             import tenacity
             
-            def log_retry(retry_state):
-                print(f"[{self.role}] API Error/RateLimit. Retrying in {retry_state.next_action.sleep}s (Attempt {retry_state.attempt_number})...")
-                
+            def _before_sleep(retry_state):
+                exc = retry_state.outcome.exception() if retry_state.outcome else None
+                msg = str(exc) if exc else ""
+                # 429 时多等一段时间再重试
+                if exc and ("429" in msg or "rate limit" in msg.lower() or "RateLimit" in type(exc).__name__):
+                    extra = 12
+                    print(f"[{self.role}] 触发限频(429)，额外等待 {extra}s 后重试 (第 {retry_state.attempt_number} 次)...")
+                    time.sleep(extra)
+                else:
+                    print(f"[{self.role}] API 异常/限频，{retry_state.next_action.sleep}s 后重试 (第 {retry_state.attempt_number} 次)...")
+                    time.sleep(retry_state.next_action.sleep)
+
             @tenacity.retry(
                 wait=tenacity.wait_exponential(multiplier=2, min=3, max=30),
                 stop=tenacity.stop_after_attempt(8),
                 retry=tenacity.retry_if_exception_type(Exception),
-                before_sleep=log_retry
+                before_sleep=_before_sleep
             )
             def _execute_api():
                 try:
@@ -617,6 +631,10 @@ class BaseAgent(QObject):
             "role": "user",
             "content": content,
         })
+
+        # Coder 调用前节流，避免紧接在 PM/Arch 之后立即请求导致 429
+        if self.role == "Coder":
+            time.sleep(3)
 
         try:
             # 调用带有工具调用支持的 API 方法，返回字典
